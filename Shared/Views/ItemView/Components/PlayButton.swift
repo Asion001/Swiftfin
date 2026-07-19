@@ -34,6 +34,21 @@ struct PlayButton: View {
         )
     }
 
+    private func queue(for item: BaseItemDto) -> (any MediaPlayerQueue)? {
+        if item.type == .audio {
+            return MusicMediaPlayerQueue(
+                item: item,
+                parent: provider.item
+            )
+        }
+
+        if item.type == .episode {
+            return EpisodeMediaPlayerQueue(episode: item)
+        }
+
+        return nil
+    }
+
     private func play(fromBeginning: Bool = false) {
         let mediaPlayerItemProvider = if fromBeginning {
             provider.mediaPlayerItemProvider?.modifyingItem {
@@ -48,13 +63,18 @@ struct PlayButton: View {
             return
         }
 
-        let queue: (any MediaPlayerQueue)? = mediaPlayerItemProvider.item.type == .episode ?
-            EpisodeMediaPlayerQueue(episode: mediaPlayerItemProvider.item) : nil
+        if mediaPlayerItemProvider.item.type == .audio {
+            NavigationRoute.musicPlayer(
+                provider: mediaPlayerItemProvider,
+                queue: queue(for: mediaPlayerItemProvider.item)
+            )
+            return
+        }
 
         router.route(
             to: .videoPlayer(
                 provider: mediaPlayerItemProvider,
-                queue: queue
+                queue: queue(for: mediaPlayerItemProvider.item)
             )
         )
     }

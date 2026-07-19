@@ -90,8 +90,9 @@ struct MainTabView: View {
                 }
             }
         }
+        .tabBarMinimizeBehavior(.onScrollDown)
         #if os(tvOS)
-        .tabViewStyle(.sidebarAdaptable)
+            .tabViewStyle(.sidebarAdaptable)
         #endif
     }
 
@@ -105,6 +106,9 @@ struct MainTabView: View {
                     await tabCoordinator.route(to: route)
                 }
             }
+        #if os(iOS)
+            .musicPlayerPopup()
+        #endif
         #if os(tvOS)
             .background(alignment: .top) {
                 FocusedPosterCinematicBackgroundView()
