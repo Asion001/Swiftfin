@@ -21,6 +21,14 @@ latency. Source-FPS matching can be toggled in settings or during playback;
 turning it off presents the latest processed frame at the display's maximum
 refresh rate.
 
+Enhanced playback can render timed text subtitles in a Swiftfin overlay so
+their size and vertical position can be changed during playback. Automatic
+positioning uses the lower letterbox bar when it is large enough, with explicit
+inside-video, lower-black-bar, and screen-bottom options plus fine vertical
+adjustment. Burned-in or image subtitles are part of the video and cannot be
+moved. Picture in Picture and external playback hand subtitle rendering back to
+AVPlayer; Picture in Picture also suspends the inline Metal renderer.
+
 All iOS/iPadOS player modes include a session sleep timer in the playback menu.
 It offers 15, 30, 45, 60, and 90 minute presets, a custom duration, extension,
 live countdown, and cancellation. The deadline follows wall-clock time through
@@ -39,7 +47,7 @@ playback restores the previous screen-awake behavior.
 | **HDR to SDR Tonemapping** | ✅ [1]            | 🔶 [2]            | Original AVPlayer picture |
 | **Anime4K Upscaling**      | ❌                | ❌                | ✅ SDR ≤1080p           |
 | **Sleep Timer**            | ✅ iOS/iPadOS      | ✅ iOS/iPadOS      | ✅ iOS/iPadOS           |
-| **Player Controls**        | Speed, aspect fill, chapters, subtitles, trickplay, audio tracks, customizable UI | Speed, aspect fill | Existing Swiftfin controls plus enhancement modes, A/B comparison, and performance monitor |
+| **Player Controls**        | Speed, aspect fill, chapters, subtitles, trickplay, audio tracks, customizable UI | Speed, aspect fill | Existing Swiftfin controls plus enhancement modes, A/B comparison, performance monitor, and text-subtitle positioning |
 | **Picture-in-Picture**     | ❌                | ✅                | Original AVPlayer picture |
 | **TLS Support**            | 1.1, 1.2 [3]      | 1.1, 1.2, 1.3     | 1.1, 1.2, 1.3          |
 | **[Airplay Audio Output](https://support.apple.com/en-us/102357)** | 🔶 [4] | ✅ | ✅; enhancement bypassed |

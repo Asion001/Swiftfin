@@ -1,7 +1,7 @@
 {
   "name": "Swiftfin Enhanced",
   "subtitle": "Swiftfin with real-time Anime4K Metal enhancement",
-  "description": "An unofficial personal Swiftfin fork that follows Jellyfin upstream and adds an iOS/iPadOS Enhanced player with source-FPS frame pacing plus a background-safe playback sleep timer. Builds are produced automatically from public source code.",
+  "description": "An unofficial personal Swiftfin fork that follows Jellyfin upstream and adds an iOS/iPadOS Enhanced player with source-FPS frame pacing, customizable text-subtitle positioning, and a background-safe playback sleep timer. Builds are produced automatically from public source code.",
   "iconURL": "https://raw.githubusercontent.com/Asion001/Swiftfin/main/Swiftfin/Resources/Assets.xcassets/AppIcons/Primary/AppIcon-primary-primary.appiconset/AppIcon-primary-primary.png",
   "headerURL": "https://raw.githubusercontent.com/Asion001/Swiftfin/main/Swiftfin/Resources/Assets.xcassets/AppIcons/Primary/AppIcon-primary-primary.appiconset/AppIcon-primary-primary.png",
   "website": "https://github.com/Asion001/Swiftfin",
@@ -15,7 +15,7 @@
       "bundleIdentifier": "dev.asion.swiftfin.enhanced",
       "developerName": "Asion001 and Jellyfin Contributors",
       "subtitle": "Jellyfin playback with Anime4K Metal enhancement",
-      "localizedDescription": "An unofficial build of Swiftfin for iPhone and iPad. It retains Swiftfin's Jellyfin experience and adds an optional AVPlayer-based Anime4K Metal enhancement pipeline with source-FPS frame pacing, bounded processing buffering, automatic performance throttling, safety fallbacks, A/B comparison, a performance monitor, and a background-safe playback sleep timer.",
+      "localizedDescription": "An unofficial build of Swiftfin for iPhone and iPad. It retains Swiftfin's Jellyfin experience and adds an optional AVPlayer-based Anime4K Metal enhancement pipeline with source-FPS frame pacing, bounded processing buffering, automatic performance throttling, PiP resource suspension, customizable text-subtitle size and black-bar positioning, A/B comparison, a performance monitor, and a background-safe playback sleep timer.",
       "iconURL": "https://raw.githubusercontent.com/Asion001/Swiftfin/main/Swiftfin/Resources/Assets.xcassets/AppIcons/Primary/AppIcon-primary-primary.appiconset/AppIcon-primary-primary.png",
       "tintColor": "#7B4DFF",
       "category": "entertainment",

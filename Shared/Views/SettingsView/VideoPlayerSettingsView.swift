@@ -368,10 +368,44 @@ struct VideoPlayerSettingsView: View {
                 }
             }
 
+            #if os(iOS)
+            Picker(
+                String(localized: "subtitle.position", defaultValue: "Subtitle position"),
+                selection: $subtitleConfiguration.position
+            ) {
+                ForEach(SubtitlePosition.allCases, id: \.rawValue) { position in
+                    Text(position.displayTitle)
+                        .tag(position)
+                }
+            }
+
+            Stepper(
+                value: $subtitleConfiguration.verticalOffset,
+                in: -200 ... 200,
+                step: 5
+            ) {
+                LabeledContent(
+                    String(localized: "subtitle.vertical-offset", defaultValue: "Vertical adjustment")
+                ) {
+                    Text(verbatim: "\(subtitleConfiguration.verticalOffset) pt")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            #endif
+
             ColorPicker(L10n.subtitleColor, selection: $subtitleConfiguration.color, supportsOpacity: false)
         } footer: {
             // TODO: better wording
+            #if os(iOS)
+            Text(
+                String(
+                    localized: "subtitle.enhanced-disclaimer",
+                    defaultValue: "Position and vertical adjustment apply to text subtitles in the Enhanced player. Image subtitles burned into the video cannot be moved."
+                )
+            )
+            #else
             Text(L10n.subtitlesDisclaimer)
+            #endif
         }
     }
 }

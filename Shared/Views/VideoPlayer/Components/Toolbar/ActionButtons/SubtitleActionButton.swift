@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import SwiftUI
 
 extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
@@ -20,6 +21,13 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
 
         @State
         private var selectedSubtitleStreamIndex: Int?
+
+        @Default(.VideoPlayer.Subtitle.configuration)
+        private var subtitleConfiguration
+
+        private var isEnhancedPlayer: Bool {
+            (manager.proxy as? AVMediaPlayerProxy)?.presentation == .enhanced
+        }
 
         private var systemImage: String {
             if selectedSubtitleStreamIndex == nil {
@@ -47,6 +55,50 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                     } else {
                         Section(L10n.subtitles) {
                             content(playbackItem: playbackItem)
+                        }
+                    }
+
+                    if isEnhancedPlayer {
+                        Divider()
+
+                        Picker(
+                            String(localized: "subtitle.position", defaultValue: "Subtitle position"),
+                            selection: $subtitleConfiguration.position
+                        ) {
+                            ForEach(SubtitlePosition.allCases, id: \.rawValue) { position in
+                                Text(position.displayTitle)
+                                    .tag(position)
+                            }
+                        }
+
+                        Stepper(
+                            value: $subtitleConfiguration.size,
+                            in: 1 ... 20,
+                            step: 1
+                        ) {
+                            LabeledContent(L10n.subtitleSize) {
+                                Text(subtitleConfiguration.size.description)
+                            }
+                        }
+
+                        Stepper(
+                            value: $subtitleConfiguration.verticalOffset,
+                            in: -200 ... 200,
+                            step: 5
+                        ) {
+                            LabeledContent(
+                                String(localized: "subtitle.vertical-offset", defaultValue: "Vertical adjustment")
+                            ) {
+                                Text(verbatim: "\(subtitleConfiguration.verticalOffset) pt")
+                            }
+                        }
+
+                        Button(
+                            String(localized: "subtitle.position.reset", defaultValue: "Reset subtitle position"),
+                            systemImage: "arrow.counterclockwise"
+                        ) {
+                            subtitleConfiguration.position = .automatic
+                            subtitleConfiguration.verticalOffset = 0
                         }
                     }
                 } label: {

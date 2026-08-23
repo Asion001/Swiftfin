@@ -17,7 +17,7 @@ import QuartzCore
 import UIKit
 
 @MainActor
-final class VideoEnhancementController: ObservableObject {
+final class VideoEnhancementController: NSObject, ObservableObject {
     @Published
     private(set) var activeLevel: VideoEnhancementLevel = .balanced
     @Published
@@ -42,6 +42,10 @@ final class VideoEnhancementController: ObservableObject {
     private(set) var sourceRotationDegrees = 0
     @Published
     private(set) var sourceSize: CGSize = .zero
+    @Published
+    private(set) var subtitleText: String?
+    @Published
+    private(set) var usesCustomSubtitleRendering = true
 
     @Published
     var isComparisonEnabled = false
@@ -78,6 +82,7 @@ final class VideoEnhancementController: ObservableObject {
     private let player: AVPlayer
     private let processor: (any VideoFrameProcessor)?
     private let processingQueue = DispatchQueue(label: "org.jellyfin.swiftfin.video-enhancement", qos: .userInteractive)
+    private let subtitleOutput = AVPlayerItemLegibleOutput()
     private let videoOutput: AVPlayerItemVideoOutput
 
     private var adaptivePolicy = EnhancementAdaptivePolicy()
@@ -123,6 +128,10 @@ final class VideoEnhancementController: ObservableObject {
             }
         }
 
+        super.init()
+
+        subtitleOutput.setDelegate(self, queue: .main)
+        subtitleOutput.suppressesPlayerRendering = true
         observeSystemState()
         refreshActiveLevel()
         refreshBypassReason()
@@ -137,11 +146,13 @@ final class VideoEnhancementController: ObservableObject {
     func configure(playerItem: AVPlayerItem, mediaPlayerItem: MediaPlayerItem) {
         if let currentItem {
             currentItem.remove(videoOutput)
+            currentItem.remove(subtitleOutput)
         }
 
         sessionGeneration += 1
         currentItem = playerItem
         playerItem.add(videoOutput)
+        playerItem.add(subtitleOutput)
         processor?.invalidate(sessionGeneration: sessionGeneration)
 
         let stream = mediaPlayerItem.videoStreams.first
@@ -155,6 +166,7 @@ final class VideoEnhancementController: ObservableObject {
         adaptivePolicy.reset(at: CACurrentMediaTime())
         frameSamples.removeAll(keepingCapacity: true)
         latestPixelBuffer = nil
+        subtitleText = nil
         outputSize = .zero
         enhancedDroppedFrames = 0
         averageProcessingTime = 0
@@ -171,9 +183,11 @@ final class VideoEnhancementController: ObservableObject {
         sessionGeneration += 1
         if let currentItem {
             currentItem.remove(videoOutput)
+            currentItem.remove(subtitleOutput)
         }
         currentItem = nil
         latestPixelBuffer = nil
+        subtitleText = nil
         isProcessingFrame = false
         pendingFrames.removeAll()
         isPixelFormatSupported = true
@@ -319,6 +333,13 @@ final class VideoEnhancementController: ObservableObject {
         bypassReason = reason
         isUsingNativePlaybackLayer = reason != nil
         videoOutput.suppressesPlayerRendering = reason == nil
+        refreshSubtitlePresentation()
+    }
+
+    private func refreshSubtitlePresentation() {
+        let usesSystemSubtitleRendering = isPictureInPictureActive || player.isExternalPlaybackActive
+        subtitleOutput.suppressesPlayerRendering = !usesSystemSubtitleRendering
+        usesCustomSubtitleRendering = !usesSystemSubtitleRendering
     }
 
     private func handlePictureInPictureChange() {
@@ -491,6 +512,27 @@ final class VideoEnhancementController: ObservableObject {
         }
         memoryRecoveryWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
+    }
+}
+
+extension VideoEnhancementController: AVPlayerItemLegibleOutputPushDelegate {
+    nonisolated func legibleOutput(
+        _ output: AVPlayerItemLegibleOutput,
+        didOutputAttributedStrings strings: [NSAttributedString],
+        nativeSampleBuffers: [Any],
+        forItemTime itemTime: CMTime
+    ) {
+        let text = strings
+            .map(\.string)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        Task { @MainActor [weak self] in
+            guard let self,
+                  output === self.subtitleOutput
+            else { return }
+            self.subtitleText = text.isEmpty ? nil : text
+        }
     }
 }
 #endif

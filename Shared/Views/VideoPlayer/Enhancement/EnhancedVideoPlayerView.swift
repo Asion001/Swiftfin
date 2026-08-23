@@ -10,6 +10,7 @@
 import AVFoundation
 import AVKit
 import CoreImage
+import Defaults
 import MetalKit
 import SwiftUI
 
@@ -26,12 +27,65 @@ struct EnhancedVideoPlayerView: View {
                 avPlayerLayer: avPlayerLayer
             )
 
+            EnhancedSubtitleOverlay(controller: controller)
+                .allowsHitTesting(false)
+
             if controller.showsPerformanceHUD {
                 VideoEnhancementPerformanceHUD(controller: controller)
                     .padding(16)
                     .allowsHitTesting(false)
             }
         }
+    }
+}
+
+private struct EnhancedSubtitleOverlay: View {
+    @ObservedObject
+    var controller: VideoEnhancementController
+
+    @Default(.VideoPlayer.Subtitle.configuration)
+    private var configuration
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let subtitleText = controller.subtitleText,
+               controller.sourceSize != .zero,
+               controller.usesCustomSubtitleRendering
+            {
+                let fontSize = EnhancedSubtitleGeometry.fontPointSize(for: configuration.size)
+                let sourceSize = VideoEnhancementGeometry.orientedSize(
+                    controller.sourceSize,
+                    rotationDegrees: controller.sourceRotationDegrees
+                )
+                let layout = EnhancedSubtitleGeometry.layout(
+                    position: configuration.position,
+                    sourceSize: sourceSize,
+                    containerSize: proxy.size,
+                    fontPointSize: fontSize,
+                    isAspectFilled: controller.isAspectFilled
+                )
+                let alignment: Alignment = layout.placement == .bottom ? .bottom : .center
+
+                Text(subtitleText)
+                    .font(.custom(configuration.fontName, size: fontSize))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(configuration.color)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(nil)
+                    .minimumScaleFactor(0.6)
+                    .shadow(color: .black.opacity(0.95), radius: 2, x: 0, y: 1)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, layout.placement == .bottom ? 18 : 0)
+                    .frame(
+                        width: layout.region.width,
+                        height: layout.region.height,
+                        alignment: alignment
+                    )
+                    .position(x: layout.region.midX, y: layout.region.midY)
+                    .offset(y: CGFloat(configuration.verticalOffset))
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 
