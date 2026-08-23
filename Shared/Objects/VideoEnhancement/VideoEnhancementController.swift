@@ -52,7 +52,10 @@ final class VideoEnhancementController: ObservableObject {
 
     @Published
     var isPictureInPictureActive = false {
-        didSet { refreshBypassReason() }
+        didSet {
+            guard isPictureInPictureActive != oldValue else { return }
+            handlePictureInPictureChange()
+        }
     }
 
     @Published
@@ -316,6 +319,23 @@ final class VideoEnhancementController: ObservableObject {
         bypassReason = reason
         isUsingNativePlaybackLayer = reason != nil
         videoOutput.suppressesPlayerRendering = reason == nil
+    }
+
+    private func handlePictureInPictureChange() {
+        if isPictureInPictureActive {
+            // Invalidate work submitted by the inline Metal renderer. The serial
+            // processing queue may finish its current command, but its result can
+            // no longer be published and no queued frame will follow it.
+            sessionGeneration += 1
+            isProcessingFrame = false
+            pendingFrames.removeAll()
+            latestPixelBuffer = nil
+            outputSize = .zero
+            processor?.invalidate(sessionGeneration: sessionGeneration)
+            processor?.drain()
+        }
+
+        refreshBypassReason()
     }
 
     private func refreshActiveLevel() {
