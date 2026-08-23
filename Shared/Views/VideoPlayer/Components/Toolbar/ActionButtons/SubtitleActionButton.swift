@@ -25,9 +25,11 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         @Default(.VideoPlayer.Subtitle.configuration)
         private var subtitleConfiguration
 
+        #if os(iOS)
         private var isEnhancedPlayer: Bool {
             (manager.proxy as? AVMediaPlayerProxy)?.presentation == .enhanced
         }
+        #endif
 
         private var systemImage: String {
             if selectedSubtitleStreamIndex == nil {
@@ -58,6 +60,7 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                         }
                     }
 
+                    #if os(iOS)
                     if isEnhancedPlayer {
                         Divider()
 
@@ -101,6 +104,7 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                             subtitleConfiguration.verticalOffset = 0
                         }
                     }
+                    #endif
                 } label: {
                     Label(L10n.subtitles, systemImage: systemImage)
                 }
