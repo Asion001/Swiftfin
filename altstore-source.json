@@ -23,6 +23,17 @@
       "versions": [
         {
           "version": "2026.8.23",
+          "buildVersion": "1787514010",
+          "marketingVersion": "Enhanced 2026.8.23 (1787514010)",
+          "date": "2026-08-23T19:40:10Z",
+          "localizedDescription": "Automated build from db73852 with thermally adaptive Anime4K Metal enhancement, realtime quality profiles, duplicate-render and offscreen-fill suppression, source-FPS frame pacing, bounded processing buffering, PiP resource suspension, customizable text-subtitle positioning, playback sleep timer, and current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787514010/Swiftfin-Enhanced.ipa",
+          "size": 183149178,
+          "sha256": "0ea11e8f4a7dde925ad840f48db3153b96ef6c0717ec825a066957353a4dd31f",
+          "minOSVersion": "18.6"
+        },
+        {
+          "version": "2026.8.23",
           "buildVersion": "1787509700",
           "marketingVersion": "Enhanced 2026.8.23 (1787509700)",
           "date": "2026-08-23T18:28:20Z",
