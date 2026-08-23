@@ -31,6 +31,11 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     @Published
     private(set) var enhancedDroppedFrames = 0
     @Published
+    private(set) var recentEnhancedDroppedFrames = 0
+    @Published
+    private(set) var recentEnhancedDropRate: Double = 0
+    private(set) var frameRevision: UInt64 = 0
+    @Published
     private(set) var isUsingNativePlaybackLayer = true
     @Published
     private(set) var outputSize: CGSize = .zero
@@ -66,6 +71,10 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     var requestedMode: VideoEnhancementMode {
         didSet {
             Defaults[.VideoPlayer.enhancementMode] = requestedMode
+            resetPerformanceWindow(
+                at: CACurrentMediaTime(),
+                startingAt: requestedMode.fixedLevel ?? .balanced
+            )
             refreshActiveLevel()
             refreshBypassReason()
         }
@@ -130,6 +139,10 @@ final class VideoEnhancementController: NSObject, ObservableObject {
 
         super.init()
 
+        adaptivePolicy.reset(
+            at: CACurrentMediaTime(),
+            startingAt: requestedMode.fixedLevel ?? .balanced
+        )
         subtitleOutput.setDelegate(self, queue: .main)
         subtitleOutput.suppressesPlayerRendering = true
         observeSystemState()
@@ -163,12 +176,17 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         isHDR = stream?.videoRangeType?.isHDR == true
         isPixelFormatSupported = true
 
-        adaptivePolicy.reset(at: CACurrentMediaTime())
+        adaptivePolicy.reset(
+            at: CACurrentMediaTime(),
+            startingAt: requestedMode.fixedLevel ?? .balanced
+        )
         frameSamples.removeAll(keepingCapacity: true)
         latestPixelBuffer = nil
         subtitleText = nil
         outputSize = .zero
         enhancedDroppedFrames = 0
+        recentEnhancedDroppedFrames = 0
+        recentEnhancedDropRate = 0
         averageProcessingTime = 0
         percentile95ProcessingTime = 0
         isProcessingFrame = false
@@ -232,16 +250,22 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         let level = activeLevel
         let comparisonEnabled = isComparisonEnabled
         let frameRate = max(1, sourceFrameRate)
+        let processingTargetSize = VideoEnhancementGeometry.orientedSize(
+            targetSize,
+            rotationDegrees: sourceRotationDegrees
+        )
         let context = VideoFrameContext(
             pixelBuffer: pixelBuffer,
             presentationTime: itemTime,
             duration: CMTime(seconds: 1 / frameRate, preferredTimescale: 600),
             sourceFrameRate: frameRate,
             sourceSize: pixelSize,
-            targetSize: VideoEnhancementGeometry.orientedSize(
-                targetSize,
-                rotationDegrees: sourceRotationDegrees
+            visibleSourceSize: VideoEnhancementGeometry.visibleSourcePixelSize(
+                sourceSize: pixelSize,
+                targetSize: processingTargetSize,
+                fill: isAspectFilled
             ),
+            targetSize: processingTargetSize,
             sessionGeneration: generation,
             level: level,
             isComparisonEnabled: comparisonEnabled
@@ -255,8 +279,14 @@ final class VideoEnhancementController: NSObject, ObservableObject {
             return
         }
 
-        latestPixelBuffer = latestPixelBuffer ?? pixelBuffer
+        if latestPixelBuffer == nil {
+            publish(pixelBuffer)
+        }
         process(context, with: processor)
+    }
+
+    func rendererDidPresentFrame() {
+        renderTickCount += 1
     }
 
     private func process(_ context: VideoFrameContext, with processor: any VideoFrameProcessor) {
@@ -279,10 +309,10 @@ final class VideoEnhancementController: NSObject, ObservableObject {
                 switch result {
                 case .passthrough:
                     self.pendingFrames.removeAll()
-                    self.latestPixelBuffer = context.pixelBuffer
+                    self.publish(context.pixelBuffer)
                     self.temporarilyBypassAfterProcessingFailure()
                 case let .replace(output):
-                    self.latestPixelBuffer = output
+                    self.publish(output)
                     self.outputSize = CGSize(
                         width: CVPixelBufferGetWidth(output),
                         height: CVPixelBufferGetHeight(output)
@@ -360,18 +390,11 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     }
 
     private func refreshActiveLevel() {
-        let maximumLevel = VideoEnhancementDevicePolicy.maximumLevel(
-            isLowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled,
-            thermalState: ProcessInfo.processInfo.thermalState
-        )
-
-        if let fixedLevel = requestedMode.fixedLevel {
-            activeLevel = min(fixedLevel, maximumLevel)
-        } else if requestedMode == .auto {
-            activeLevel = min(adaptivePolicy.level, maximumLevel)
-        } else {
+        guard requestedMode != .off else {
             activeLevel = .fast
+            return
         }
+        activeLevel = min(adaptivePolicy.level, maximumAllowedLevel)
     }
 
     private func recordSample(duration: TimeInterval, wasDropped: Bool, at timestamp: TimeInterval) {
@@ -383,26 +406,56 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         frameSamples.append(sample)
         frameSamples.removeAll { timestamp - $0.timestamp > 3 }
 
+        recentEnhancedDroppedFrames = frameSamples.count(where: \.wasDropped)
+        recentEnhancedDropRate = frameSamples.isEmpty
+            ? 0
+            : Double(recentEnhancedDroppedFrames) / Double(frameSamples.count)
+
         let completedDurations = frameSamples.filter { !$0.wasDropped }.map(\.processingDuration)
         averageProcessingTime = completedDurations.isEmpty
             ? 0
             : completedDurations.reduce(0, +) / Double(completedDurations.count)
         percentile95ProcessingTime = EnhancementAdaptivePolicy.percentile95(completedDurations)
 
-        if requestedMode == .auto {
+        if requestedMode != .off {
             let frameDuration = 1 / max(1, sourceFrameRate)
-            let maximumLevel = VideoEnhancementDevicePolicy.maximumLevel(
-                isLowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled,
-                thermalState: ProcessInfo.processInfo.thermalState
+            activeLevel = adaptivePolicy.record(
+                sample,
+                frameDuration: frameDuration,
+                maximumLevel: maximumAllowedLevel
             )
-            activeLevel = adaptivePolicy.record(sample, frameDuration: frameDuration, maximumLevel: maximumLevel)
         } else {
             refreshActiveLevel()
         }
     }
 
+    private var maximumAllowedLevel: VideoEnhancementLevel {
+        let deviceMaximum = VideoEnhancementDevicePolicy.maximumLevel(
+            isLowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled,
+            thermalState: ProcessInfo.processInfo.thermalState
+        )
+        return min(requestedMode.fixedLevel ?? .quality, deviceMaximum)
+    }
+
+    private func publish(_ pixelBuffer: CVPixelBuffer) {
+        latestPixelBuffer = pixelBuffer
+        frameRevision &+= 1
+    }
+
+    private func resetPerformanceWindow(
+        at timestamp: TimeInterval,
+        startingAt level: VideoEnhancementLevel
+    ) {
+        adaptivePolicy.reset(at: timestamp, startingAt: level)
+        frameSamples.removeAll(keepingCapacity: true)
+        pendingFrames.removeAll()
+        averageProcessingTime = 0
+        percentile95ProcessingTime = 0
+        recentEnhancedDroppedFrames = 0
+        recentEnhancedDropRate = 0
+    }
+
     private func updateDisplayFrameRate(at timestamp: TimeInterval) {
-        renderTickCount += 1
         let elapsed = timestamp - renderTickWindowStart
         guard elapsed >= 1 else { return }
         displayFrameRate = Double(renderTickCount) / elapsed

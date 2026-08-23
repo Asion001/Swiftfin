@@ -104,6 +104,14 @@ private struct EnhancedVideoSurface: UIViewRepresentable {
     }
 }
 
+private final class PresentedPixelBufferLease: @unchecked Sendable {
+    let pixelBuffer: CVPixelBuffer
+
+    init(_ pixelBuffer: CVPixelBuffer) {
+        self.pixelBuffer = pixelBuffer
+    }
+}
+
 @MainActor
 private final class EnhancedPlayerUIView: UIView, MTKViewDelegate {
     private let avPlayerLayer: AVPlayerLayer
@@ -111,6 +119,10 @@ private final class EnhancedPlayerUIView: UIView, MTKViewDelegate {
     private let context: CIContext?
     private let controller: VideoEnhancementController
     private let metalView: MTKView
+    private var lastRenderedDrawableSize = CGSize.zero
+    private var lastRenderedFrameRevision: UInt64?
+    private var lastRenderedIsAspectFilled = false
+    private var lastRenderedRotationDegrees = 0
     private var pictureInPictureController: AVPictureInPictureController?
     private let sRGBColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
 
@@ -184,6 +196,12 @@ private final class EnhancedPlayerUIView: UIView, MTKViewDelegate {
               let pixelBuffer = controller.latestPixelBuffer
         else { return }
 
+        let presentationChanged = lastRenderedFrameRevision != controller.frameRevision ||
+            lastRenderedDrawableSize != view.drawableSize ||
+            lastRenderedIsAspectFilled != controller.isAspectFilled ||
+            lastRenderedRotationDegrees != controller.sourceRotationDegrees
+        guard presentationChanged else { return }
+
         guard let commandQueue, let context else {
             controller.rendererDidFail()
             return
@@ -229,8 +247,21 @@ private final class EnhancedPlayerUIView: UIView, MTKViewDelegate {
             bounds: targetBounds,
             colorSpace: sRGBColorSpace
         )
+        // Keep the package-owned pooled buffer alive until Metal has finished
+        // sampling it. The Anime4K pool can allocate another surface instead of
+        // reusing the one currently being presented.
+        let pixelBufferLease = PresentedPixelBufferLease(pixelBuffer)
+        commandBuffer.addCompletedHandler { _ in
+            withExtendedLifetime(pixelBufferLease) {}
+        }
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        controller.rendererDidPresentFrame()
+
+        lastRenderedFrameRevision = controller.frameRevision
+        lastRenderedDrawableSize = view.drawableSize
+        lastRenderedIsAspectFilled = controller.isAspectFilled
+        lastRenderedRotationDegrees = controller.sourceRotationDegrees
     }
 }
 
@@ -283,17 +314,23 @@ private struct VideoEnhancementPerformanceHUD: View {
             Text("Anime4K \(controller.requestedMode.displayTitle) → \(controller.activeLevel.displayTitle)")
             Text("\(sourceResolution) → \(outputResolution)")
             Text(String(
-                format: "source %.1f fps · renderer %.1f fps%@",
+                format: "source %.1f fps · renderer %.1f fps · %@",
                 controller.sourceFrameRate,
                 controller.displayFrameRate,
-                controller.matchesSourceFrameRate ? " matched" : " max"
+                controller.matchesSourceFrameRate ? "source-gated" : "display max"
             ))
             Text(String(
                 format: "GPU %.2f ms avg · %.2f ms p95",
                 controller.averageProcessingTime * 1000,
                 controller.percentile95ProcessingTime * 1000
             ))
-            Text("drops \(controller.enhancedDroppedFrames) queued · \(controller.avPlayerDroppedFrames) player")
+            Text(String(
+                format: "drops %.1f%% / 3s (%d) · %d total · %d player",
+                controller.recentEnhancedDropRate * 100,
+                controller.recentEnhancedDroppedFrames,
+                controller.enhancedDroppedFrames,
+                controller.avPlayerDroppedFrames
+            ))
             Text("thermal \(thermalState) · low power \(ProcessInfo.processInfo.isLowPowerModeEnabled ? "on" : "off")")
 
             if let bypassReason = controller.bypassReason {

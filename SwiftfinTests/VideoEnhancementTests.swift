@@ -70,9 +70,9 @@ final class VideoEnhancementTests: XCTestCase {
     }
 
     func testPresetMapping() {
-        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .fast), "modeAFast")
-        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .balanced), "modeAAFast")
-        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .quality), "modeAAHQ")
+        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .fast), "modeCFast")
+        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .balanced), "modeAFast")
+        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .quality), "modeAAFast")
     }
 
     func testFramePacingUsesSourceCadenceOrDisplayMaximum() {
@@ -222,6 +222,28 @@ final class VideoEnhancementTests: XCTestCase {
         ), .fast)
     }
 
+    func testFixedQualityCanSafetyThrottleWithoutExceedingRequestedLevel() {
+        let frameDuration = 1.0 / 24
+        var policy = EnhancementAdaptivePolicy()
+        policy.reset(at: 0, startingAt: .quality)
+
+        XCTAssertEqual(policy.record(
+            .init(timestamp: 5, processingDuration: frameDuration, wasDropped: false),
+            frameDuration: frameDuration,
+            maximumLevel: .quality
+        ), .balanced)
+        XCTAssertEqual(policy.record(
+            .init(timestamp: 10, processingDuration: frameDuration, wasDropped: false),
+            frameDuration: frameDuration,
+            maximumLevel: .quality
+        ), .fast)
+        XCTAssertEqual(policy.record(
+            .init(timestamp: 30, processingDuration: frameDuration * 0.2, wasDropped: false),
+            frameDuration: frameDuration,
+            maximumLevel: .balanced
+        ), .fast)
+    }
+
     func testAspectGeometryAndEvenOutputSize() {
         let fit = VideoEnhancementGeometry.aspectRect(
             sourceSize: CGSize(width: 1920, height: 1080),
@@ -252,6 +274,25 @@ final class VideoEnhancementTests: XCTestCase {
         )
         XCTAssertEqual(VideoEnhancementGeometry.exifOrientation(rotationDegrees: 90), 6)
         XCTAssertEqual(VideoEnhancementGeometry.exifOrientation(rotationDegrees: -90), 8)
+
+        XCTAssertEqual(
+            VideoEnhancementGeometry.visibleSourcePixelSize(
+                sourceSize: CGSize(width: 1920, height: 1080),
+                targetSize: CGSize(width: 2048, height: 1536),
+                fill: true
+            ),
+            CGSize(width: 1440, height: 1080)
+        )
+        XCTAssertNil(VideoEnhancementGeometry.visibleSourcePixelSize(
+            sourceSize: CGSize(width: 1920, height: 1080),
+            targetSize: CGSize(width: 2048, height: 1536),
+            fill: false
+        ))
+        XCTAssertNil(VideoEnhancementGeometry.visibleSourcePixelSize(
+            sourceSize: CGSize(width: 1920, height: 1080),
+            targetSize: CGSize(width: 2560, height: 1440),
+            fill: true
+        ))
     }
 
     func testEnhancedSubtitleGeometryUsesLowerBlackBarAndFallsBackSafely() {
@@ -357,6 +398,12 @@ final class VideoEnhancementTests: XCTestCase {
 
         let normal = try processor.process(context(pixelBuffer: input, generation: 9))
         let compared = try processor.process(context(pixelBuffer: input, generation: 9, comparison: true))
+        let cropped = try processor.process(context(
+            pixelBuffer: input,
+            generation: 9,
+            visibleSourceSize: CGSize(width: 48, height: 48),
+            targetSize: CGSize(width: 96, height: 96)
+        ))
 
         for result in [normal, compared] {
             guard case let .replace(output) = result else {
@@ -367,6 +414,12 @@ final class VideoEnhancementTests: XCTestCase {
             let attachment = CVBufferCopyAttachment(output, orientationKey, nil) as? NSNumber
             XCTAssertEqual(attachment?.intValue, 6)
         }
+
+        guard case let .replace(croppedOutput) = cropped else {
+            return XCTFail("A visible-region crop should still replace the frame")
+        }
+        XCTAssertEqual(CVPixelBufferGetWidth(croppedOutput), 96)
+        XCTAssertEqual(CVPixelBufferGetHeight(croppedOutput), 96)
     }
 
     private func eligibleInputs() -> VideoEnhancementEligibility.Inputs {
@@ -389,7 +442,9 @@ final class VideoEnhancementTests: XCTestCase {
     private func context(
         pixelBuffer: CVPixelBuffer,
         generation: Int64,
-        comparison: Bool = false
+        comparison: Bool = false,
+        visibleSourceSize: CGSize? = nil,
+        targetSize: CGSize = CGSize(width: 128, height: 96)
     ) -> VideoFrameContext {
         .init(
             pixelBuffer: pixelBuffer,
@@ -397,7 +452,8 @@ final class VideoEnhancementTests: XCTestCase {
             duration: CMTime(value: 1, timescale: 24),
             sourceFrameRate: 24,
             sourceSize: CGSize(width: 64, height: 48),
-            targetSize: CGSize(width: 128, height: 96),
+            visibleSourceSize: visibleSourceSize,
+            targetSize: targetSize,
             sessionGeneration: generation,
             level: .fast,
             isComparisonEnabled: comparison

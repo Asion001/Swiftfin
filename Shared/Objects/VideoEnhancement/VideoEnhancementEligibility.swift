@@ -104,6 +104,35 @@ enum VideoEnhancementGeometry {
         )
     }
 
+    static func visibleSourcePixelSize(
+        sourceSize: CGSize,
+        targetSize: CGSize,
+        fill: Bool
+    ) -> CGSize? {
+        guard fill,
+              sourceSize.width > 0,
+              sourceSize.height > 0,
+              targetSize.width > 0,
+              targetSize.height > 0
+        else { return nil }
+
+        let sourceAspect = sourceSize.width / sourceSize.height
+        let targetAspect = targetSize.width / targetSize.height
+        var visibleSize = sourceSize
+
+        if sourceAspect > targetAspect {
+            visibleSize.width = sourceSize.height * targetAspect
+        } else if sourceAspect < targetAspect {
+            visibleSize.height = sourceSize.width / targetAspect
+        }
+
+        visibleSize = outputPixelSize(for: visibleSize)
+        guard visibleSize.width < sourceSize.width || visibleSize.height < sourceSize.height else {
+            return nil
+        }
+        return visibleSize
+    }
+
     static func aspectRect(sourceSize: CGSize, targetSize: CGSize, fill: Bool) -> CGRect {
         guard sourceSize.width > 0,
               sourceSize.height > 0,

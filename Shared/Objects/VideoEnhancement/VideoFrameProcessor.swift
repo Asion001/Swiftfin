@@ -16,6 +16,7 @@ struct VideoFrameContext: @unchecked Sendable {
     let duration: CMTime
     let sourceFrameRate: Double
     let sourceSize: CGSize
+    let visibleSourceSize: CGSize?
     let targetSize: CGSize
     let sessionGeneration: Int64
     let level: VideoEnhancementLevel

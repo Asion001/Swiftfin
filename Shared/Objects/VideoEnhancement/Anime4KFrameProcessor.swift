@@ -15,10 +15,10 @@ import VideoToolbox
 final class Anime4KFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
     private let interpolator: Anime4KInterpolator
     private let lock = NSLock()
+    private var cropPool: CVPixelBufferPool?
+    private var cropPoolSize: CGSize?
+    private var cropTransferSession: VTPixelTransferSession?
     private var needsDrain = false
-    private var outputPool: CVPixelBufferPool?
-    private var outputPoolDescriptor: OutputPoolDescriptor?
-    private var transferSession: VTPixelTransferSession?
     private var sessionGeneration: Int64 = 0
 
     init() throws {
@@ -40,22 +40,32 @@ final class Anime4KFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
         }
 
         let outputSize = VideoEnhancementGeometry.outputPixelSize(for: context.targetSize)
+        let processingInput = cropToVisibleRegion(context) ?? context.pixelBuffer
 
         let packageOutput = try interpolator.enhance(
-            pixelBuffer: context.pixelBuffer,
+            pixelBuffer: processingInput,
             preset: Self.preset(for: context.level),
             maxOutputWidth: Int(outputSize.width),
             maxOutputHeight: Int(outputSize.height),
             abCompareEnabled: context.isComparisonEnabled
         )
-        let output = copyIntoReusableOutputBuffer(packageOutput) ?? packageOutput
-        CVBufferPropagateAttachments(context.pixelBuffer, output)
+        // Anime4KMetal already returns a pixel buffer from its own reusable pool.
+        // Copying that result into a second Swiftfin-owned pool adds a full-size
+        // VideoToolbox transfer to every frame and significantly increases memory
+        // bandwidth and sustained thermal load on iPad.
+        CVBufferPropagateAttachments(context.pixelBuffer, packageOutput)
+        if context.visibleSourceSize != nil {
+            // The source aperture describes the uncropped frame and must not be
+            // applied to the smaller fill-mode output surface.
+            CVBufferRemoveAttachment(packageOutput, kCVImageBufferCleanApertureKey)
+            CVBufferRemoveAttachment(packageOutput, kCVImageBufferPreferredCleanApertureKey)
+        }
 
         lock.lock()
         let shouldPublish = context.sessionGeneration == sessionGeneration
         lock.unlock()
 
-        return shouldPublish ? .replace(output) : .passthrough
+        return shouldPublish ? .replace(packageOutput) : .passthrough
     }
 
     func drain() {
@@ -78,68 +88,81 @@ final class Anime4KFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
     static func presetRawValue(for level: VideoEnhancementLevel) -> String {
         switch level {
         case .fast:
-            "modeAFast"
+            "modeCFast"
         case .balanced:
-            "modeAAFast"
+            "modeAFast"
         case .quality:
-            "modeAAHQ"
+            "modeAAFast"
         }
     }
 
-    private func copyIntoReusableOutputBuffer(_ source: CVPixelBuffer) -> CVPixelBuffer? {
-        let descriptor = OutputPoolDescriptor(
-            width: CVPixelBufferGetWidth(source),
-            height: CVPixelBufferGetHeight(source),
-            pixelFormat: CVPixelBufferGetPixelFormatType(source)
-        )
-        if outputPoolDescriptor != descriptor {
-            outputPool = Self.makeOutputPool(descriptor: descriptor)
-            outputPoolDescriptor = descriptor
+    private func resetResources() {
+        interpolator.reset()
+        if let cropTransferSession {
+            VTPixelTransferSessionInvalidate(cropTransferSession)
+        }
+        cropTransferSession = nil
+        cropPool = nil
+        cropPoolSize = nil
+    }
+
+    private func cropToVisibleRegion(_ context: VideoFrameContext) -> CVPixelBuffer? {
+        guard let visibleSourceSize = context.visibleSourceSize else { return nil }
+        let cropSize = VideoEnhancementGeometry.outputPixelSize(for: visibleSourceSize)
+
+        if cropPoolSize != cropSize {
+            cropPool = Self.makeCropPool(size: cropSize)
+            cropPoolSize = cropSize
         }
 
-        guard let outputPool else { return nil }
+        guard let cropPool else { return nil }
         var destination: CVPixelBuffer?
-        let allocationAttributes = [kCVPixelBufferPoolAllocationThresholdKey as String: 3] as CFDictionary
+        let allocationAttributes = [kCVPixelBufferPoolAllocationThresholdKey as String: 2] as CFDictionary
         guard CVPixelBufferPoolCreatePixelBufferWithAuxAttributes(
             kCFAllocatorDefault,
-            outputPool,
+            cropPool,
             allocationAttributes,
             &destination
         ) == kCVReturnSuccess, let destination else { return nil }
 
-        if transferSession == nil {
-            VTPixelTransferSessionCreate(
+        if cropTransferSession == nil {
+            var session: VTPixelTransferSession?
+            guard VTPixelTransferSessionCreate(
                 allocator: kCFAllocatorDefault,
-                pixelTransferSessionOut: &transferSession
-            )
+                pixelTransferSessionOut: &session
+            ) == noErr, let session else { return nil }
+            guard VTSessionSetProperty(
+                session,
+                key: kVTPixelTransferPropertyKey_ScalingMode,
+                value: kVTScalingMode_Trim
+            ) == noErr else {
+                VTPixelTransferSessionInvalidate(session)
+                return nil
+            }
+            cropTransferSession = session
         }
-        guard let transferSession,
-              VTPixelTransferSessionTransferImage(transferSession, from: source, to: destination) == noErr
+
+        guard let cropTransferSession,
+              VTPixelTransferSessionTransferImage(
+                  cropTransferSession,
+                  from: context.pixelBuffer,
+                  to: destination
+              ) == noErr
         else { return nil }
 
         return destination
     }
 
-    private func resetResources() {
-        interpolator.reset()
-        if let transferSession {
-            VTPixelTransferSessionInvalidate(transferSession)
-        }
-        transferSession = nil
-        outputPool = nil
-        outputPoolDescriptor = nil
-    }
-
-    private static func makeOutputPool(descriptor: OutputPoolDescriptor) -> CVPixelBufferPool? {
+    private static func makeCropPool(size: CGSize) -> CVPixelBufferPool? {
         let attributes: [String: Any] = [
-            kCVPixelBufferWidthKey as String: descriptor.width,
-            kCVPixelBufferHeightKey as String: descriptor.height,
-            kCVPixelBufferPixelFormatTypeKey as String: descriptor.pixelFormat,
+            kCVPixelBufferWidthKey as String: Int(size.width),
+            kCVPixelBufferHeightKey as String: Int(size.height),
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
             kCVPixelBufferMetalCompatibilityKey as String: true,
             kCVPixelBufferIOSurfacePropertiesKey as String: [:],
         ]
         var pool: CVPixelBufferPool?
-        let poolAttributes = [kCVPixelBufferPoolMinimumBufferCountKey as String: 3] as CFDictionary
+        let poolAttributes = [kCVPixelBufferPoolMinimumBufferCountKey as String: 2] as CFDictionary
         guard CVPixelBufferPoolCreate(
             kCFAllocatorDefault,
             poolAttributes,
@@ -147,12 +170,6 @@ final class Anime4KFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
             &pool
         ) == kCVReturnSuccess else { return nil }
         return pool
-    }
-
-    private struct OutputPoolDescriptor: Equatable {
-        let width: Int
-        let height: Int
-        let pixelFormat: OSType
     }
 }
 #endif

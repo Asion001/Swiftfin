@@ -19,8 +19,8 @@ struct EnhancementAdaptivePolicy: Sendable {
     private var lastLevelChange: TimeInterval = -.infinity
     private var samples: [EnhancementPerformanceSample] = []
 
-    mutating func reset(at timestamp: TimeInterval) {
-        level = .balanced
+    mutating func reset(at timestamp: TimeInterval, startingAt startingLevel: VideoEnhancementLevel = .balanced) {
+        level = startingLevel
         lastLevelChange = timestamp
         samples.removeAll(keepingCapacity: true)
     }
@@ -34,7 +34,7 @@ struct EnhancementAdaptivePolicy: Sendable {
         samples.removeAll { sample.timestamp - $0.timestamp > 20 }
 
         let recent = samples.filter { sample.timestamp - $0.timestamp <= 3 }
-        let p95 = Self.percentile95(recent.map(\.processingDuration))
+        let p95 = Self.percentile95(recent.filter { !$0.wasDropped }.map(\.processingDuration))
         let dropRate = recent.isEmpty ? 0 : Double(recent.count(where: \.wasDropped)) / Double(recent.count)
 
         if sample.timestamp - lastLevelChange >= 5,
@@ -47,7 +47,7 @@ struct EnhancementAdaptivePolicy: Sendable {
             }
         } else if sample.timestamp - lastLevelChange >= 20 {
             let stable = samples.filter { sample.timestamp - $0.timestamp <= 20 }
-            let stableP95 = Self.percentile95(stable.map(\.processingDuration))
+            let stableP95 = Self.percentile95(stable.filter { !$0.wasDropped }.map(\.processingDuration))
             let hasDrops = stable.contains(where: \.wasDropped)
 
             if stable.count >= 20, stableP95 < frameDuration * 0.6, !hasDrops {
