@@ -122,7 +122,10 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         self.showsPerformanceHUD = Defaults[.VideoPlayer.enhancementPerformanceHUD]
 
         let attributes: [String: Any] = [
-            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
+            // MetalFX consumes BGRA directly. Asking AVFoundation for BGRA avoids
+            // the provider's former NV12-to-BGRA conversion and its extra full-
+            // resolution intermediate texture on every frame.
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
             kCVPixelBufferMetalCompatibilityKey as String: true,
             kCVPixelBufferIOSurfacePropertiesKey as String: [:],
         ]
@@ -132,7 +135,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
             self.processor = nil
         } else {
             do {
-                self.processor = try Anime4KFrameProcessor()
+                self.processor = try MetalFXFrameProcessor()
             } catch {
                 self.processor = nil
             }
@@ -334,16 +337,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     }
 
     private static func supports(pixelBuffer: CVPixelBuffer) -> Bool {
-        switch CVPixelBufferGetPixelFormatType(pixelBuffer) {
-        case kCVPixelFormatType_32BGRA,
-             kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-             kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-             kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
-             kCVPixelFormatType_420YpCbCr10BiPlanarFullRange:
-            true
-        default:
-            false
-        }
+        CVPixelBufferGetPixelFormatType(pixelBuffer) == kCVPixelFormatType_32BGRA
     }
 
     private func refreshBypassReason() {

@@ -104,6 +104,21 @@ enum VideoEnhancementGeometry {
         )
     }
 
+    static func scaledOutputPixelSize(sourceSize: CGSize, targetSize: CGSize) -> CGSize {
+        guard sourceSize.width > 0,
+              sourceSize.height > 0,
+              targetSize.width > 0,
+              targetSize.height > 0
+        else { return outputPixelSize(for: sourceSize) }
+
+        let scale = min(targetSize.width / sourceSize.width, targetSize.height / sourceSize.height)
+        guard scale > 1 else { return outputPixelSize(for: sourceSize) }
+        return outputPixelSize(for: CGSize(
+            width: sourceSize.width * scale,
+            height: sourceSize.height * scale
+        ))
+    }
+
     static func visibleSourcePixelSize(
         sourceSize: CGSize,
         targetSize: CGSize,

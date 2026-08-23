@@ -129,11 +129,11 @@ enum VideoEnhancementStrings {
     static let performance = String(localized: "enhancement.performance", defaultValue: "Performance monitor")
     static let energyWarning = String(
         localized: "enhancement.energy-warning",
-        defaultValue: "Anime enhancement uses the GPU and may increase battery use and device temperature. Auto mode reduces quality before playback is affected."
+        defaultValue: "Real-time enhancement uses the GPU and may increase battery use and device temperature. Auto mode reduces edge enhancement before playback is affected."
     )
     static let enhancedPlayerDescription = String(
         localized: "enhancement.player-description",
-        defaultValue: "Uses Apple's AVPlayer with real-time Anime4K Metal enhancement. Unsupported formats may be remuxed or transcoded by Jellyfin. HDR, AirPlay, and Picture in Picture use the original picture."
+        defaultValue: "Uses Apple's AVPlayer and GPU-accelerated system scaling for efficient real-time upscaling. Unsupported formats may be remuxed or transcoded by Jellyfin. HDR, AirPlay, and Picture in Picture use the original picture."
     )
     static let frameRateExplanation = String(
         localized: "enhancement.frame-rate-explanation",

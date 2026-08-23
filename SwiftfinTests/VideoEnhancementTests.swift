@@ -69,10 +69,10 @@ final class VideoEnhancementTests: XCTestCase {
         XCTAssertEqual(SleepTimerController.clockString(for: 3661), "1:01:01")
     }
 
-    func testPresetMapping() {
-        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .fast), "modeCFast")
-        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .balanced), "modeAFast")
-        XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .quality), "modeAAFast")
+    func testMetalFXSharpnessMapping() {
+        XCTAssertEqual(MetalFXFrameProcessor.sharpness(for: .fast), 0.25)
+        XCTAssertEqual(MetalFXFrameProcessor.sharpness(for: .balanced), 0.55)
+        XCTAssertEqual(MetalFXFrameProcessor.sharpness(for: .quality), 0.85)
     }
 
     func testEnhancedProfileRequestsTextSubtitlesAsHLSAndImageSubtitlesAsEncoded() {
@@ -283,6 +283,13 @@ final class VideoEnhancementTests: XCTestCase {
             CGSize(width: 2048, height: 1536)
         )
         XCTAssertEqual(
+            VideoEnhancementGeometry.scaledOutputPixelSize(
+                sourceSize: CGSize(width: 1920, height: 1080),
+                targetSize: CGSize(width: 2366, height: 1640)
+            ),
+            CGSize(width: 2366, height: 1330)
+        )
+        XCTAssertEqual(
             VideoEnhancementGeometry.orientedSize(
                 CGSize(width: 1920, height: 1080),
                 rotationDegrees: 90
@@ -395,7 +402,12 @@ final class VideoEnhancementTests: XCTestCase {
 
     func testSessionInvalidationReturnsPassthrough() throws {
         guard MTLCreateSystemDefaultDevice() != nil else { throw XCTSkip("Metal unavailable") }
-        let processor = try Anime4KFrameProcessor()
+        let processor: MetalFXFrameProcessor
+        do {
+            processor = try MetalFXFrameProcessor()
+        } catch {
+            throw XCTSkip("MetalFX unavailable: \(error)")
+        }
         processor.invalidate(sessionGeneration: 7)
         let input = try makePixelBuffer(width: 32, height: 24)
         let result = try processor.process(context(pixelBuffer: input, generation: 6))
@@ -407,7 +419,12 @@ final class VideoEnhancementTests: XCTestCase {
 
     func testFrameOutputSizeOrientationAndComparison() throws {
         guard MTLCreateSystemDefaultDevice() != nil else { throw XCTSkip("Metal unavailable") }
-        let processor = try Anime4KFrameProcessor()
+        let processor: MetalFXFrameProcessor
+        do {
+            processor = try MetalFXFrameProcessor()
+        } catch {
+            throw XCTSkip("MetalFX unavailable: \(error)")
+        }
         processor.invalidate(sessionGeneration: 9)
         let input = try makePixelBuffer(width: 64, height: 48)
         let orientationKey = "SwiftfinTestOrientation" as CFString

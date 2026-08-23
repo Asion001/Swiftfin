@@ -247,9 +247,8 @@ private final class EnhancedPlayerUIView: UIView, MTKViewDelegate {
             bounds: targetBounds,
             colorSpace: sRGBColorSpace
         )
-        // Keep the package-owned pooled buffer alive until Metal has finished
-        // sampling it. The Anime4K pool can allocate another surface instead of
-        // reusing the one currently being presented.
+        // Keep the pooled MetalFX output alive until the display command has
+        // finished sampling it. The processor can then reuse that pool slot.
         let pixelBufferLease = PresentedPixelBufferLease(pixelBuffer)
         commandBuffer.addCompletedHandler { _ in
             withExtendedLifetime(pixelBufferLease) {}
@@ -311,7 +310,9 @@ private struct VideoEnhancementPerformanceHUD: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Anime4K \(controller.requestedMode.displayTitle) → \(controller.activeLevel.displayTitle)")
+            Text(
+                "\(MetalFXFrameProcessor.engineDisplayName) \(controller.requestedMode.displayTitle) → \(controller.activeLevel.displayTitle)"
+            )
             Text("\(sourceResolution) → \(outputResolution)")
             Text(String(
                 format: "source %.1f fps · renderer %.1f fps · %@",
