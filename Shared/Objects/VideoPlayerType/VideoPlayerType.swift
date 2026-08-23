@@ -16,7 +16,9 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
     case enhanced
     #endif
     case native
+    #if !targetEnvironment(macCatalyst)
     case swiftfin
+    #endif
 
     var displayTitle: String {
         switch self {
@@ -26,8 +28,10 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
         #endif
         case .native:
             L10n.native
+        #if !targetEnvironment(macCatalyst)
         case .swiftfin:
             L10n.swiftfin
+        #endif
         }
     }
 
@@ -39,8 +43,10 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
         #endif
         case .native:
             Self._nativeDirectPlayProfiles
+        #if !targetEnvironment(macCatalyst)
         case .swiftfin:
             Self._swiftfinDirectPlayProfiles
+        #endif
         }
     }
 
@@ -52,8 +58,10 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
         #endif
         case .native:
             Self._nativeTranscodingProfiles
+        #if !targetEnvironment(macCatalyst)
         case .swiftfin:
             Self._swiftfinTranscodingProfiles
+        #endif
         }
     }
 
@@ -65,8 +73,10 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
         #endif
         case .native:
             Self._nativeSubtitleProfiles
+        #if !targetEnvironment(macCatalyst)
         case .swiftfin:
             Self._swiftfinSubtitleProfiles
+        #endif
         }
     }
 }

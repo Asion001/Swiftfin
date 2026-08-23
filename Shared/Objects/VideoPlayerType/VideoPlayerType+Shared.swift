@@ -22,8 +22,10 @@ extension VideoPlayerType {
         #endif
         case .native:
             Self._nativeCodecProfiles
+        #if !targetEnvironment(macCatalyst)
         case .swiftfin:
             Self._swiftfinCodecProfiles
+        #endif
         }
     }
 

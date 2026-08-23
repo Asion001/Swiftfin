@@ -6,7 +6,9 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+#if !targetEnvironment(macCatalyst)
 import BlurHashKit
+#endif
 import Nuke
 import SwiftUI
 
@@ -56,6 +58,11 @@ struct PosterImage<Element: Poster>: View {
                         element.transform(image: image, displayType: displayType)
                     }
                     .placeholder { imageSource in
+                        #if targetEnvironment(macCatalyst)
+                        SystemImageContentView(
+                            systemName: element.systemImage
+                        )
+                        #else
                         if let blurHash = imageSource.blurHash {
                             Image(
                                 blurHash: blurHash,
@@ -67,6 +74,7 @@ struct PosterImage<Element: Poster>: View {
                                 systemName: element.systemImage
                             )
                         }
+                        #endif
                     }
                     .failure {
                         SystemImageContentView(

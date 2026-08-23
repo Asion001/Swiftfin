@@ -84,12 +84,16 @@ extension DownloadTaskView {
                         }
                     case .complete:
                         Button(L10n.play) {
+                            #if !targetEnvironment(macCatalyst)
                             if Defaults[.VideoPlayer.videoPlayerType] == .swiftfin {
                                 router.dismiss()
 //                                    router.route(to: .videoPlayer(manager: DownloadVideoPlayerManager(downloadTask: downloadTask)))
                             } else {
                                 isPresentingVideoPlayerTypeError = true
                             }
+                            #else
+                            isPresentingVideoPlayerTypeError = true
+                            #endif
                         }
                         .frame(maxWidth: 300)
                         .frame(height: 50)

@@ -291,7 +291,11 @@ extension Defaults.Keys {
         }
 
         static var videoPlayerType: Key<VideoPlayerType> {
+            #if targetEnvironment(macCatalyst)
+            UserKey("videoPlayerType", default: .enhanced)
+            #else
             UserKey("videoPlayerType", default: .swiftfin)
+            #endif
         }
 
         #if os(iOS)

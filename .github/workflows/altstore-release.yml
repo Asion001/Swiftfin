@@ -18,6 +18,9 @@ concurrency:
 env:
   BUNDLE_IDENTIFIER: dev.asion.swiftfin.enhanced
   IPA_NAME: Swiftfin-Enhanced.ipa
+  MAC_BUNDLE_IDENTIFIER: dev.asion.swiftfin.enhanced.macos
+  MAC_ZIP_NAME: Swiftfin-Enhanced-Mac.zip
+  MAC_SHA_NAME: Swiftfin-Enhanced-Mac.zip.sha256
 
 jobs:
   publish:
@@ -123,16 +126,71 @@ jobs:
           echo "app=$app" >> "$GITHUB_OUTPUT"
           echo "ipa=$ipa" >> "$GITHUB_OUTPUT"
 
+      - name: Build unsigned Apple silicon Mac app
+        run: |
+          xcodebuild -quiet \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -project Swiftfin.xcodeproj \
+            -scheme Swiftfin \
+            -configuration Release \
+            -destination 'generic/platform=macOS,variant=Mac Catalyst' \
+            -derivedDataPath "$RUNNER_TEMP/SwiftfinMacDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_ENTITLEMENTS= \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            PRODUCT_BUNDLE_IDENTIFIER="$MAC_BUNDLE_IDENTIFIER" \
+            INFOPLIST_KEY_CFBundleDisplayName='Swiftfin Enhanced' \
+            MARKETING_VERSION="${{ steps.metadata.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.metadata.outputs.build_version }}" \
+            build
+
+      - name: Package and verify Mac app
+        id: package_mac
+        run: |
+          source_app="$RUNNER_TEMP/SwiftfinMacDerivedData/Build/Products/Release-maccatalyst/Swiftfin iOS.app"
+          stage="$RUNNER_TEMP/SwiftfinMacPackage"
+          app="$stage/Swiftfin Enhanced.app"
+          zip="$RUNNER_TEMP/$MAC_ZIP_NAME"
+          sha="$RUNNER_TEMP/$MAC_SHA_NAME"
+          test -d "$source_app"
+          mkdir -p "$stage"
+          ditto --norsrc --noextattr "$source_app" "$app"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Swiftfin Enhanced" "$app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :LSApplicationCategoryType string public.app-category.entertainment" "$app/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "$MAC_BUNDLE_IDENTIFIER"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$app/Contents/Info.plist")" = "Swiftfin Enhanced"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$app/Contents/Info.plist")" = "MacOSX"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "${{ steps.metadata.outputs.version }}"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" = "${{ steps.metadata.outputs.build_version }}"
+          test "$(lipo -archs "$app/Contents/MacOS/Swiftfin iOS")" = "arm64"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          ditto -c -k --norsrc --noextattr --keepParent "$app" "$zip"
+          test -s "$zip"
+          unzip -tq "$zip"
+          (cd "$RUNNER_TEMP" && shasum -a 256 "$MAC_ZIP_NAME" > "$MAC_SHA_NAME")
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.metadata.outputs.tag }}
         run: |
-          notes="Automated Swiftfin Enhanced build from commit ${{ steps.metadata.outputs.short_sha }}. Includes the thermally adaptive iOS/iPadOS Anime4K Metal player, realtime quality profiles, duplicate-render and offscreen-fill suppression, source-FPS frame pacing, bounded processing buffering, PiP resource suspension, customizable text-subtitle positioning, and playback sleep timer. Install through the AltStore Classic source."
+          notes="Automated Swiftfin Enhanced build from commit ${{ steps.metadata.outputs.short_sha }}. Includes the thermally adaptive Anime4K Metal player, realtime quality profiles, duplicate-render and offscreen-fill suppression, source-FPS frame pacing, bounded processing buffering, PiP resource suspension, customizable text-subtitle positioning, and playback sleep timer. Install iOS/iPadOS through the AltStore Classic source, or use the checksum-verified Apple silicon Mac package."
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${{ steps.package.outputs.ipa }}#$IPA_NAME" --clobber
+            gh release upload "$TAG" \
+              "${{ steps.package.outputs.ipa }}#$IPA_NAME" \
+              "${{ steps.package_mac.outputs.zip }}#$MAC_ZIP_NAME" \
+              "${{ steps.package_mac.outputs.sha }}#$MAC_SHA_NAME" \
+              --clobber
           else
-            gh release create "$TAG" "${{ steps.package.outputs.ipa }}#$IPA_NAME" \
+            gh release create "$TAG" \
+              "${{ steps.package.outputs.ipa }}#$IPA_NAME" \
+              "${{ steps.package_mac.outputs.zip }}#$MAC_ZIP_NAME" \
+              "${{ steps.package_mac.outputs.sha }}#$MAC_SHA_NAME" \
               --title "Swiftfin Enhanced ${{ steps.metadata.outputs.version }} (${{ steps.metadata.outputs.build_version }})" \
               --notes "$notes"
           fi

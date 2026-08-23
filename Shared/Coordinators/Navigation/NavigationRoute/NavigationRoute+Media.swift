@@ -86,8 +86,10 @@ struct VideoPlayerViewShim: View {
     var body: some View {
         Group {
             switch Defaults[.VideoPlayer.videoPlayerType] {
+            #if !targetEnvironment(macCatalyst)
             case .swiftfin:
                 VideoPlayer()
+            #endif
             case .native:
                 NativeVideoPlayer()
             #if os(iOS)

@@ -136,10 +136,12 @@ struct SettingsView: View {
                 router.route(to: .playbackQualitySettings)
             }
         } learnMore: {
+            #if !targetEnvironment(macCatalyst)
             LabeledContent(
                 L10n.swiftfin,
                 value: L10n.playerSwiftfinDescription
             )
+            #endif
             LabeledContent(
                 L10n.native,
                 value: L10n.playerNativeDescription

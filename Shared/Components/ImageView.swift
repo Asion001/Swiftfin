@@ -6,7 +6,9 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+#if !targetEnvironment(macCatalyst)
 import BlurHashKit
+#endif
 import Nuke
 import NukeUI
 import SwiftUI
@@ -143,7 +145,11 @@ struct DefaultPlaceholderView: View {
 
     let blurHash: String?
 
+    @ViewBuilder
     var body: some View {
+        #if targetEnvironment(macCatalyst)
+        Color.clear
+        #else
         if let blurHash {
             Image(
                 blurHash: blurHash,
@@ -151,5 +157,6 @@ struct DefaultPlaceholderView: View {
             )?
                 .resizable()
         }
+        #endif
     }
 }

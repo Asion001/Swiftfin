@@ -47,7 +47,11 @@ struct VideoPlayer: View {
     #endif
 
     init(proxy: (any VideoMediaPlayerProxy)? = nil) {
+        #if targetEnvironment(macCatalyst)
+        self._proxy = .init(wrappedValue: proxy ?? AVMediaPlayerProxy())
+        #else
         self._proxy = .init(wrappedValue: proxy ?? VLCMediaPlayerProxy())
+        #endif
     }
 
     var body: some View {

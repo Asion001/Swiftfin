@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+#if !targetEnvironment(macCatalyst)
 import Defaults
 import Foundation
 import JellyfinAPI
@@ -231,3 +232,4 @@ extension VLCMediaPlayerProxy {
         }
     }
 }
+#endif

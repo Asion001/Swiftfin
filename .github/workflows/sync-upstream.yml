@@ -72,7 +72,6 @@ jobs:
           fi
 
           git push origin HEAD:main
-          gh workflow run altstore-release.yml --ref main
 
           if [ "$(gh api "repos/${{ github.repository }}" --jq .has_issues)" = "true" ]; then
             issue_number=$(gh issue list --state open --search 'Upstream sync conflict in:title' --json number --jq '.[0].number // empty')

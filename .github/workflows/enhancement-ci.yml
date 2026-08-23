@@ -60,6 +60,21 @@ jobs:
             -only-testing:SwiftfinTests \
             test
 
+      - name: Build Mac Catalyst compatibility
+        run: |
+          xcodebuild -quiet \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -project Swiftfin.xcodeproj \
+            -scheme Swiftfin \
+            -configuration Debug \
+            -destination 'generic/platform=macOS,variant=Mac Catalyst' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_ENTITLEMENTS= \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
       - name: Build tvOS compatibility
         run: |
           xcodebuild -quiet \

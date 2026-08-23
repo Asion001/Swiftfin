@@ -37,6 +37,17 @@ https://raw.githubusercontent.com/Asion001/Swiftfin/main/altstore-source.json
 
 The source and IPA releases update automatically after conflict-free merges from Jellyfin upstream. See the [AltStore distribution documentation](Documentation/altstore.md) for build and update details.
 
+### Swiftfin Enhanced for Mac
+
+The same releases include an Apple silicon Mac Catalyst app with Native and Enhanced AVPlayer playback. The checksum-verified installer can also enable daily background updates:
+
+```bash
+curl -fL https://raw.githubusercontent.com/Asion001/Swiftfin/main/Scripts/install_macos.sh -o /tmp/install-swiftfin-enhanced.sh
+bash /tmp/install-swiftfin-enhanced.sh --enable-auto-update
+```
+
+See the [macOS installation and security notes](Documentation/macos.md). The personal GitHub build is ad-hoc signed rather than Apple-notarized.
+
 ## 🛠️ TestFlight
 
 Use the TestFlight version to test new features and bug fixes before being published to the App Store. We are grateful for your time and resources for reporting new bugs.
