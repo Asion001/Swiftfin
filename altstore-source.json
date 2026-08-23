@@ -20,16 +20,28 @@
       "tintColor": "#7B4DFF",
       "category": "entertainment",
       "screenshots": [],
-      "versions": [],
+      "versions": [
+        {
+          "version": "2026.8.23",
+          "buildVersion": "1787493886",
+          "marketingVersion": "Enhanced 2026.8.23 (1787493886)",
+          "date": "2026-08-23T14:04:46Z",
+          "localizedDescription": "Automated build from 1f6512b with Anime4K Metal enhancement and current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787493886/Swiftfin-Enhanced.ipa",
+          "size": 183097241,
+          "sha256": "bc58fc83d2065e0f23354a8d0f83d4ace7aaaf49bf3fcdcffb1d5b8291acaca1",
+          "minOSVersion": "18.6"
+        }
+      ],
       "appPermissions": {
         "entitlements": [],
         "privacy": {
-          "NSBluetoothAlwaysUsageDescription": "Swiftfin uses Bluetooth to discover nearby Cast devices.",
-          "NSBluetoothPeripheralUsageDescription": "Swiftfin uses Bluetooth to discover nearby Cast devices.",
-          "NSFaceIDUsageDescription": "Swiftfin uses Face ID to lock and access local users.",
-          "NSLocalNetworkUsageDescription": "Swiftfin uses the local network to connect to your Jellyfin server and discover Cast-enabled devices on your Wi-Fi network.",
-          "NSLocationWhenInUseUsageDescription": "Swiftfin uses your location to identify the current Wi-Fi network.",
-          "NSMicrophoneUsageDescription": "Swiftfin uses the microphone to listen for ultrasonic tokens when pairing with nearby Cast devices."
+          "NSBluetoothAlwaysUsageDescription": "Swiftfin iOS uses Bluetooth to discover nearby Cast devices.",
+          "NSBluetoothPeripheralUsageDescription": "Swiftfin iOS uses Bluetooth to discover nearby Cast devices.",
+          "NSFaceIDUsageDescription": "Swiftfin iOS uses Face ID to lock and access local users.",
+          "NSLocalNetworkUsageDescription": "Swiftfin iOS uses the local network to connect to your Jellyfin server and discover Cast-enabled devices on your Wi-Fi network.",
+          "NSLocationWhenInUseUsageDescription": "Swiftfin iOS uses your location to identify the current Wi-Fi network.",
+          "NSMicrophoneUsageDescription": "Swiftfin iOS uses the microphone to listen for ultrasonic tokens when pairing with nearby Cast devices."
         }
       }
     }
