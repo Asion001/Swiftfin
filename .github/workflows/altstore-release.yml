@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - altstore-source.json
+      - .github/workflows/enhancement-ci.yml
   workflow_dispatch:
 
 permissions:
