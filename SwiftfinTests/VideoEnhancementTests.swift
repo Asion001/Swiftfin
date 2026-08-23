@@ -75,6 +75,23 @@ final class VideoEnhancementTests: XCTestCase {
         XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .quality), "modeAAFast")
     }
 
+    func testEnhancedProfileRequestsTextSubtitlesAsHLSAndImageSubtitlesAsEncoded() {
+        let profiles = VideoPlayerType.enhanced.subtitleProfiles
+
+        XCTAssertTrue(profiles.contains {
+            $0.format == SubtitleFormat.ass.rawValue && $0.method == .hls
+        })
+        XCTAssertTrue(profiles.contains {
+            $0.format == SubtitleFormat.subrip.rawValue && $0.method == .hls
+        })
+        XCTAssertTrue(profiles.contains {
+            $0.format == SubtitleFormat.pgssub.rawValue && $0.method == .encode
+        })
+        XCTAssertFalse(profiles.contains {
+            $0.format == SubtitleFormat.pgssub.rawValue && $0.method == .hls
+        })
+    }
+
     func testFramePacingUsesSourceCadenceOrDisplayMaximum() {
         XCTAssertEqual(EnhancementFramePacing.preferredFramesPerSecond(
             sourceFrameRate: 23.976,

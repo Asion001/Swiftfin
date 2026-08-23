@@ -163,6 +163,42 @@ extension VideoPlayerType {
         }
     }
 
+    /// Enhanced renders text cues above its Metal surface. Ask Jellyfin to
+    /// convert common text formats to WebVTT in HLS; image formats remain
+    /// server-rendered because AVPlayerItemLegibleOutput cannot expose them.
+    @ArrayBuilder<SubtitleProfile>
+    static var _enhancedSubtitleProfiles: [SubtitleProfile] {
+
+        SubtitleProfile.build(method: .embed) {
+            SubtitleFormat.cc_dec
+            SubtitleFormat.ttml
+        }
+
+        SubtitleProfile.build(method: .hls) {
+            SubtitleFormat.ass
+            SubtitleFormat.mov_text
+            SubtitleFormat.mpl2
+            SubtitleFormat.pjs
+            SubtitleFormat.realtext
+            SubtitleFormat.sami
+            SubtitleFormat.ssa
+            SubtitleFormat.subrip
+            SubtitleFormat.subviewer
+            SubtitleFormat.subviewer1
+            SubtitleFormat.text
+            SubtitleFormat.ttml
+            SubtitleFormat.vplayer
+            SubtitleFormat.vtt
+        }
+
+        SubtitleProfile.build(method: .encode) {
+            SubtitleFormat.dvbsub
+            SubtitleFormat.dvdsub
+            SubtitleFormat.pgssub
+            SubtitleFormat.xsub
+        }
+    }
+
     // MARK: - Codec Profiles
 
     @ArrayBuilder<CodecProfile>

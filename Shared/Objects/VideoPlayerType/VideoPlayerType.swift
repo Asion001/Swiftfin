@@ -69,7 +69,7 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
         switch self {
         #if os(iOS)
         case .enhanced:
-            Self._nativeSubtitleProfiles
+            Self._enhancedSubtitleProfiles
         #endif
         case .native:
             Self._nativeSubtitleProfiles

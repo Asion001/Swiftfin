@@ -79,7 +79,10 @@ struct VideoPlayer: View {
             sleepTimerController.invalidate()
             #endif
         }
-        .prefersStatusBarHidden(!containerState.isPresentingOverlay)
+        // Keep the fullscreen player's safe area fixed while controls appear.
+        // Moving the toolbar with the status bar invalidated menu hit testing,
+        // especially during Pencil hover and scrolling.
+        .prefersStatusBarHidden(true)
         .onChange(of: audioOffset) {
             if let proxy = proxy as? MediaPlayerOffsetConfigurable {
                 proxy.setAudioOffset(audioOffset)

@@ -145,6 +145,7 @@ extension VideoPlayer {
                         #if os(iOS)
                         ZStack {
                             GestureView()
+                                .allowsHitTesting(!containerState.isPresentingModal)
                                 .environment(
                                     \.panGestureDirection,
                                     containerState.isPresentingSupplement

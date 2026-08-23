@@ -109,6 +109,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     private var renderTickCount = 0
     private var renderTickWindowStart = CACurrentMediaTime()
     private var sessionGeneration: Int64 = 0
+    private var subtitleSelectionTask: Task<Void, Never>?
     private var targetSize: CGSize = .zero
     private var thermalRecoveryWorkItem: DispatchWorkItem?
     private var retainsCriticalThermalBypass = false
@@ -151,6 +152,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     }
 
     deinit {
+        subtitleSelectionTask?.cancel()
         notificationTokens.forEach(NotificationCenter.default.removeObserver)
         thermalRecoveryWorkItem?.cancel()
         memoryRecoveryWorkItem?.cancel()
@@ -193,12 +195,15 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         pendingFrames.removeAll()
         isComparisonEnabled = false
         processingFailureGeneration = nil
+        selectSubtitle(for: mediaPlayerItem, in: playerItem, generation: sessionGeneration)
         refreshActiveLevel()
         refreshBypassReason()
     }
 
     func invalidate() {
         sessionGeneration += 1
+        subtitleSelectionTask?.cancel()
+        subtitleSelectionTask = nil
         if let currentItem {
             currentItem.remove(videoOutput)
             currentItem.remove(subtitleOutput)
@@ -370,6 +375,62 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         let usesSystemSubtitleRendering = isPictureInPictureActive || player.isExternalPlaybackActive
         subtitleOutput.suppressesPlayerRendering = !usesSystemSubtitleRendering
         usesCustomSubtitleRendering = !usesSystemSubtitleRendering
+    }
+
+    private func selectSubtitle(
+        for mediaPlayerItem: MediaPlayerItem,
+        in playerItem: AVPlayerItem,
+        generation: Int64
+    ) {
+        subtitleSelectionTask?.cancel()
+
+        let selectedIndex = mediaPlayerItem.selectedSubtitleStreamIndex
+        let selectedStream = selectedIndex.flatMap { index in
+            mediaPlayerItem.subtitleStreams.first { $0.index == index }
+        }
+
+        subtitleSelectionTask = Task { @MainActor [weak self, weak playerItem] in
+            guard let self, let playerItem else { return }
+
+            do {
+                guard let group = try await playerItem.asset.loadMediaSelectionGroup(for: .legible),
+                      !Task.isCancelled,
+                      generation == self.sessionGeneration,
+                      playerItem === self.currentItem
+                else { return }
+
+                guard let selectedIndex, selectedIndex != -1 else {
+                    playerItem.select(nil, in: group)
+                    self.subtitleText = nil
+                    return
+                }
+
+                let language = selectedStream?.language?.lowercased()
+                let title = selectedStream?.displayTitle?.lowercased()
+                let option = group.options.first { option in
+                    if let language,
+                       option.extendedLanguageTag?.lowercased().hasPrefix(language) == true
+                    {
+                        return true
+                    }
+                    if let title {
+                        let optionTitle = option.displayName.lowercased()
+                        if title.contains(optionTitle) || optionTitle.contains(title) {
+                            return true
+                        }
+                    }
+                    return false
+                } ?? (group.options.count == 1 ? group.options.first : nil)
+
+                // Jellyfin HLS normally exposes only the requested subtitle. If
+                // its metadata does not match exactly, choosing the first legible
+                // option is safer than suppressing captions and showing nothing.
+                playerItem.select(option ?? group.options.first, in: group)
+            } catch {
+                // Encoded/image subtitles have no legible group because they are
+                // already part of the video. Playback continues unchanged.
+            }
+        }
     }
 
     private func handlePictureInPictureChange() {

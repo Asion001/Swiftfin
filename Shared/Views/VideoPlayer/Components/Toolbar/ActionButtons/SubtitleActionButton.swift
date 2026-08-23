@@ -19,24 +19,31 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         @EnvironmentObject
         private var manager: MediaPlayerManager
 
+        @EnvironmentObject
+        private var containerState: VideoPlayerContainerState
+
         @State
         private var selectedSubtitleStreamIndex: Int?
 
-        @Default(.VideoPlayer.Subtitle.configuration)
-        private var subtitleConfiguration
-
         #if os(iOS)
+        @State
+        private var isPresentingSubtitleDialog = false
+
         private var isEnhancedPlayer: Bool {
             (manager.proxy as? AVMediaPlayerProxy)?.presentation == .enhanced
         }
         #endif
 
         private var systemImage: String {
-            if selectedSubtitleStreamIndex == nil {
+            if selectedSubtitleStreamIndex == nil || selectedSubtitleStreamIndex == -1 {
                 VideoPlayerActionButton.subtitles.secondarySystemImage
             } else {
                 VideoPlayerActionButton.subtitles.systemImage
             }
+        }
+
+        private var label: some View {
+            Label(L10n.subtitles, systemImage: systemImage)
         }
 
         @ViewBuilder
@@ -49,64 +56,57 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
             }
         }
 
+        private func standardMenu(playbackItem: MediaPlayerItem) -> some View {
+            Menu {
+                if isInMenu {
+                    content(playbackItem: playbackItem)
+                } else {
+                    Section(L10n.subtitles) {
+                        content(playbackItem: playbackItem)
+                    }
+                }
+            } label: {
+                label
+            }
+        }
+
+        #if os(iOS)
+        private var enhancedSubtitleButton: some View {
+            Button {
+                isPresentingSubtitleDialog = true
+            } label: {
+                label
+            }
+            .sheet(isPresented: $isPresentingSubtitleDialog) {
+                EnhancedSubtitleSettingsView(
+                    selectedSubtitleStreamIndex: $selectedSubtitleStreamIndex,
+                    isPresented: $isPresentingSubtitleDialog
+                )
+                .environmentObject(manager)
+                .onAppear {
+                    containerState.isPresentingModal = true
+                }
+                .onDisappear {
+                    containerState.isPresentingModal = false
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+        }
+        #endif
+
         var body: some View {
             if let playbackItem = manager.playbackItem {
-                Menu {
-                    if isInMenu {
-                        content(playbackItem: playbackItem)
-                    } else {
-                        Section(L10n.subtitles) {
-                            content(playbackItem: playbackItem)
-                        }
-                    }
-
+                Group {
                     #if os(iOS)
                     if isEnhancedPlayer {
-                        Divider()
-
-                        Picker(
-                            String(localized: "subtitle.position", defaultValue: "Subtitle position"),
-                            selection: $subtitleConfiguration.position
-                        ) {
-                            ForEach(SubtitlePosition.allCases, id: \.rawValue) { position in
-                                Text(position.displayTitle)
-                                    .tag(position)
-                            }
-                        }
-
-                        Stepper(
-                            value: $subtitleConfiguration.size,
-                            in: 1 ... 20,
-                            step: 1
-                        ) {
-                            LabeledContent(L10n.subtitleSize) {
-                                Text(subtitleConfiguration.size.description)
-                            }
-                        }
-
-                        Stepper(
-                            value: $subtitleConfiguration.verticalOffset,
-                            in: -200 ... 200,
-                            step: 5
-                        ) {
-                            LabeledContent(
-                                String(localized: "subtitle.vertical-offset", defaultValue: "Vertical adjustment")
-                            ) {
-                                Text(verbatim: "\(subtitleConfiguration.verticalOffset) pt")
-                            }
-                        }
-
-                        Button(
-                            String(localized: "subtitle.position.reset", defaultValue: "Reset subtitle position"),
-                            systemImage: "arrow.counterclockwise"
-                        ) {
-                            subtitleConfiguration.position = .automatic
-                            subtitleConfiguration.verticalOffset = 0
-                        }
+                        enhancedSubtitleButton
+                    } else {
+                        standardMenu(playbackItem: playbackItem)
                     }
+                    #else
+                    standardMenu(playbackItem: playbackItem)
                     #endif
-                } label: {
-                    Label(L10n.subtitles, systemImage: systemImage)
                 }
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(.primary, .secondary)
@@ -119,3 +119,90 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         }
     }
 }
+
+#if os(iOS)
+private struct EnhancedSubtitleSettingsView: View {
+    @EnvironmentObject
+    private var manager: MediaPlayerManager
+
+    @Default(.VideoPlayer.Subtitle.configuration)
+    private var subtitleConfiguration
+
+    @Binding
+    var selectedSubtitleStreamIndex: Int?
+
+    @Binding
+    var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let playbackItem = manager.playbackItem {
+                    Section(L10n.subtitles) {
+                        Picker(L10n.subtitles, selection: $selectedSubtitleStreamIndex) {
+                            ForEach(playbackItem.subtitleStreams.prepending(.none), id: \.index) { stream in
+                                Text(stream.displayTitle ?? L10n.unknown)
+                                    .tag(stream.index as Int?)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                    }
+                }
+
+                Section(
+                    String(localized: "subtitle.appearance", defaultValue: "Appearance")
+                ) {
+                    Picker(
+                        String(localized: "subtitle.position", defaultValue: "Subtitle position"),
+                        selection: $subtitleConfiguration.position
+                    ) {
+                        ForEach(SubtitlePosition.allCases, id: \.rawValue) { position in
+                            Text(position.displayTitle)
+                                .tag(position)
+                        }
+                    }
+
+                    Stepper(
+                        value: $subtitleConfiguration.size,
+                        in: 1 ... 20,
+                        step: 1
+                    ) {
+                        LabeledContent(L10n.subtitleSize) {
+                            Text(subtitleConfiguration.size.description)
+                        }
+                    }
+
+                    Stepper(
+                        value: $subtitleConfiguration.verticalOffset,
+                        in: -200 ... 200,
+                        step: 5
+                    ) {
+                        LabeledContent(
+                            String(localized: "subtitle.vertical-offset", defaultValue: "Vertical adjustment")
+                        ) {
+                            Text(verbatim: "\(subtitleConfiguration.verticalOffset) pt")
+                        }
+                    }
+
+                    Button(
+                        String(localized: "subtitle.position.reset", defaultValue: "Reset subtitle position"),
+                        systemImage: "arrow.counterclockwise"
+                    ) {
+                        subtitleConfiguration.position = .automatic
+                        subtitleConfiguration.verticalOffset = 0
+                    }
+                }
+            }
+            .navigationTitle(L10n.subtitles)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.done) {
+                        isPresented = false
+                    }
+                }
+            }
+        }
+    }
+}
+#endif

@@ -123,6 +123,20 @@ class VideoPlayerContainerState: ObservableObject {
     @Published
     var isProgressBarFocused: Bool = false
 
+    /// Keeps transient player UI stable while a sheet or other modal control is open.
+    /// The normal overlay dismissal timer must not hide the toolbar underneath it.
+    @Published
+    var isPresentingModal: Bool = false {
+        didSet {
+            if isPresentingModal {
+                isPresentingOverlay = true
+                timer.stop()
+            } else if isPresentingOverlay {
+                timer.poke()
+            }
+        }
+    }
+
     var originalPlaybackRate: Float?
 
     let centerOffsetBox: PublishedBox<CGFloat> = .init(initialValue: 0)
@@ -173,7 +187,11 @@ class VideoPlayerContainerState: ObservableObject {
     init() {
         timerCancellable = timer.sink { [weak self] in
             guard let self else { return }
-            guard !isScrubbing, !isPresentingSupplement, manager?.playbackRequestStatus != .paused else { return }
+            guard !isScrubbing,
+                  !isPresentingSupplement,
+                  !isPresentingModal,
+                  manager?.playbackRequestStatus != .paused
+            else { return }
 
             withAnimation(.linear(duration: 0.25)) {
                 self.isPresentingOverlay = false
