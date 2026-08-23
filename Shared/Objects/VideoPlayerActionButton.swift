@@ -16,6 +16,7 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
     #if os(iOS)
     case enhancement
     case gestureLock
+    case sleepTimer
     #endif
     case playbackSpeed
     case playbackSettings
@@ -36,6 +37,8 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
             VideoEnhancementStrings.title
         case .gestureLock:
             L10n.gestureLock
+        case .sleepTimer:
+            SleepTimerStrings.title
         #endif
         case .playbackSpeed:
             L10n.playbackSpeed
@@ -92,6 +95,7 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
         case .autoPlay: usesLiquidGlassSymbols ? "play.fill" : "play.circle.fill"
         case .enhancement: "sparkles"
         case .gestureLock: usesLiquidGlassSymbols ? "lock.fill" : "lock.circle.fill"
+        case .sleepTimer: "moon.zzz.fill"
         case .playbackSpeed: "speedometer"
         case .playbackSettings: usesLiquidGlassSymbols ? "tv" : "tv.circle.fill"
         case .playNextItem: usesLiquidGlassSymbols ? "forward.end.fill" : "forward.end.circle.fill"
@@ -112,6 +116,7 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
             }
         case .gestureLock: "lock.open.fill"
         case .enhancement: systemImage
+        case .sleepTimer: systemImage
         case .subtitles: "captions.bubble"
         default:
             systemImage
@@ -132,6 +137,7 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
             .audio,
             .subtitles,
             .enhancement,
+            .sleepTimer,
             .playbackSpeed,
             .playbackSettings,
         ]

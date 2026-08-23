@@ -12,6 +12,13 @@ unsupported pixel formats, and constrained device states automatically use the
 original AVPlayer picture. Auto mode adapts quality to frame timing, Low Power
 Mode, and thermal state. Enhanced is currently unavailable on tvOS.
 
+All iOS/iPadOS player modes include a session sleep timer in the playback menu.
+It offers 15, 30, 45, 60, and 90 minute presets, a custom duration, extension,
+live countdown, and cancellation. The deadline follows wall-clock time through
+buffering, background audio, and significant system clock changes. At expiry,
+Swiftfin pauses playback and releases its screen-awake state; manually resuming
+playback restores the previous screen-awake behavior.
+
 ---
 
 ## Feature Support
@@ -22,6 +29,7 @@ Mode, and thermal state. Enhanced is currently unavailable on tvOS.
 | **Framerate Matching**     | ❌                | ✅                | ✅                     |
 | **HDR to SDR Tonemapping** | ✅ [1]            | 🔶 [2]            | Original AVPlayer picture |
 | **Anime4K Upscaling**      | ❌                | ❌                | ✅ SDR ≤1080p           |
+| **Sleep Timer**            | ✅ iOS/iPadOS      | ✅ iOS/iPadOS      | ✅ iOS/iPadOS           |
 | **Player Controls**        | Speed, aspect fill, chapters, subtitles, trickplay, audio tracks, customizable UI | Speed, aspect fill | Existing Swiftfin controls plus enhancement modes, A/B comparison, and performance monitor |
 | **Picture-in-Picture**     | ❌                | ✅                | Original AVPlayer picture |
 | **TLS Support**            | 1.1, 1.2 [3]      | 1.1, 1.2, 1.3     | 1.1, 1.2, 1.3          |

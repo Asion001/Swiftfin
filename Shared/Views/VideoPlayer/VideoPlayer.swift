@@ -38,6 +38,13 @@ struct VideoPlayer: View {
 
     @StateObject
     private var containerState: VideoPlayerContainerState = .init()
+    #if os(iOS)
+    @Toaster
+    private var toaster
+
+    @StateObject
+    private var sleepTimerController: SleepTimerController = .init()
+    #endif
 
     init(proxy: (any VideoMediaPlayerProxy)? = nil) {
         self._proxy = .init(wrappedValue: proxy ?? VLCMediaPlayerProxy())
@@ -53,9 +60,20 @@ struct VideoPlayer: View {
         } playbackControls: {
             PlaybackControls()
         }
+        #if os(iOS)
+        .environmentObject(sleepTimerController)
+        #endif
         .onAppear {
             manager.proxy = proxy
+            #if os(iOS)
+            sleepTimerController.attach(to: manager)
+            #endif
             manager.start()
+        }
+        .onDisappear {
+            #if os(iOS)
+            sleepTimerController.invalidate()
+            #endif
         }
         .prefersStatusBarHidden(!containerState.isPresentingOverlay)
         .onChange(of: audioOffset) {
@@ -122,5 +140,10 @@ struct VideoPlayer: View {
         } message: {
             Text(L10n.unableToLoadThisItem)
         }
+        #if os(iOS)
+        .onChange(of: sleepTimerController.expirationCount) {
+            toaster.present(SleepTimerStrings.paused, systemName: "moon.zzz.fill")
+        }
+        #endif
     }
 }

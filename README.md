@@ -29,7 +29,7 @@
 
 ### Swiftfin Enhanced AltStore source
 
-This fork publishes an unofficial iOS/iPadOS build with optional real-time Anime4K Metal enhancement. Add the following source URL to **AltStore Classic**:
+This fork publishes an unofficial iOS/iPadOS build with optional real-time Anime4K Metal enhancement and a background-safe playback sleep timer. Add the following source URL to **AltStore Classic**:
 
 ```text
 https://raw.githubusercontent.com/Asion001/Swiftfin/main/altstore-source.json

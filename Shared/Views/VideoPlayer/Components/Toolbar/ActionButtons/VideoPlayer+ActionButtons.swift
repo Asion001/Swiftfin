@@ -75,6 +75,11 @@ extension VideoPlayer.PlaybackControls.Toolbar {
             {
                 buttons.append(.enhancement)
             }
+            if !rawBarActionButtons.contains(.sleepTimer),
+               !rawMenuActionButtons.contains(.sleepTimer)
+            {
+                buttons.append(.sleepTimer)
+            }
             #endif
             return buttons
         }
@@ -98,7 +103,7 @@ extension VideoPlayer.PlaybackControls.Toolbar {
         private func isMenuButton(_ button: VideoPlayerActionButton) -> Bool {
             switch button {
             #if os(iOS)
-            case .enhancement:
+            case .enhancement, .sleepTimer:
                 true
             #endif
             case .audio, .playbackSpeed, .playbackSettings, .subtitles:
@@ -122,6 +127,8 @@ extension VideoPlayer.PlaybackControls.Toolbar {
                 Enhancement()
             case .gestureLock:
                 GestureLock()
+            case .sleepTimer:
+                SleepTimer()
             #endif
             case .playbackSpeed:
                 PlaybackRateMenu()
