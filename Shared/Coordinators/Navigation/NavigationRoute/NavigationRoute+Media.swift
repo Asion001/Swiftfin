@@ -85,10 +85,15 @@ struct VideoPlayerViewShim: View {
 
     var body: some View {
         Group {
-            if Defaults[.VideoPlayer.videoPlayerType] == .swiftfin {
+            switch Defaults[.VideoPlayer.videoPlayerType] {
+            case .swiftfin:
                 VideoPlayer()
-            } else {
+            case .native:
                 NativeVideoPlayer()
+            #if os(iOS)
+            case .enhanced:
+                VideoPlayer(proxy: AVMediaPlayerProxy(presentation: .enhanced))
+            #endif
             }
         }
         .colorScheme(.dark) // use over `preferredColorScheme(.dark)` to not have destination change

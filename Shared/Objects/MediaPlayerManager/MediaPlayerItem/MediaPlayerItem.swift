@@ -126,6 +126,13 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
     func isRebuildRequired(type: MediaStreamType, from oldIndex: Int?, to newIndex: Int?) -> Bool {
         let isTranscoding = mediaSource.transcodingURL != nil
 
+        if let policy = manager?.proxy as? MediaPlayerTrackRebuildPolicy,
+           policy.requiresTrackRebuild,
+           type == .audio || type == .subtitle
+        {
+            return true
+        }
+
         // Disabling a track is ALWAYS a local-only operation.
         guard let newIndex, newIndex != -1 else { return false }
 

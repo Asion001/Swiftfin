@@ -218,7 +218,7 @@ class Fastfile: LaneFile {
             outputName: .userDefined("\(sanitizedName(for: scheme)).ipa"),
             skipArchive: .userDefined(false),
             sdk: .userDefined(sdk),
-            xcargs: .userDefined("-skipMacroValidation"),
+            xcargs: .userDefined("-skipMacroValidation -skipPackagePluginValidation"),
             skipProfileDetection: false,
             disablePackageAutomaticUpdates: true
         )

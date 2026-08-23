@@ -63,3 +63,8 @@ protocol MediaPlayerOffsetConfigurable {
 protocol MediaPlayerSubtitleConfigurable {
     func setSubtitleConfiguration(_ configuration: SubtitleConfiguration)
 }
+
+@MainActor
+protocol MediaPlayerTrackRebuildPolicy {
+    var requiresTrackRebuild: Bool { get }
+}

@@ -294,6 +294,16 @@ extension Defaults.Keys {
             UserKey("videoPlayerType", default: .swiftfin)
         }
 
+        #if os(iOS)
+        static var enhancementMode: Key<VideoEnhancementMode> {
+            UserKey("videoEnhancementMode", default: .auto)
+        }
+
+        static var enhancementPerformanceHUD: Key<Bool> {
+            UserKey("videoEnhancementPerformanceHUD", default: false)
+        }
+        #endif
+
         enum Gesture {
 
             static var horizontalPanAction: Key<PanGestureAction> {

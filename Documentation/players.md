@@ -1,20 +1,31 @@
 # Player Differences
 
-Swiftfin offers two player options: **Swiftfin** (VLCKit) and **Native** (AVPlayer). The Swiftfin team recommends using Swiftfin (VLCKit) for optimal compatibility and features, though Native (AVPlayer) is also available for certain cases that benefit from Apple's native capabilities. All video, audio, and subtitle formats listed are supported for direct playback but may be repackaged based on container support. If transcoding is enabled on your server, any unsupported formats will be converted automatically.
+Swiftfin offers three player options on iOS and iPadOS: **Swiftfin** (VLCKit),
+**Native** (AVPlayer), and **Enhanced** (AVPlayer with real-time Anime4K Metal
+processing). Swiftfin remains the default and is recommended for optimal
+compatibility. Enhanced uses the Native device profile, so Jellyfin can remux
+or transcode unsupported containers, audio, and subtitles before playback.
+
+Enhanced processes SDR sources up to 1920×1080 only when the display target is
+larger. HDR, live streams, Picture in Picture, AirPlay/external playback,
+unsupported pixel formats, and constrained device states automatically use the
+original AVPlayer picture. Auto mode adapts quality to frame timing, Low Power
+Mode, and thermal state. Enhanced is currently unavailable on tvOS.
 
 ---
 
 ## Feature Support
 
-| Feature                    | Swiftfin (VLCKit) | Native (AVPlayer) |
-|----------------------------|-------------------|----------------|
-| **External Audio Tracks**  | ❌                | ❌             |
-| **Framerate Matching**     | ❌                | ✅             |
-| **HDR to SDR Tonemapping** | ✅ [1]            | 🔶 [2]         |
-| **Player Controls**        | - Speed Adjustment <br>- Aspect Fill <br>- Chapter Support <br>- Subtitle Support <br>- Trickplay Support <br>- Audio Track Selection <br>- Customizable UI | - Speed Adjustment <br>- Aspect Fill |
-| **Picture-in-Picture**     | ❌                | ✅             |
-| **TLS Support**            | 1.1, 1.2 [3]      | 1.1, 1.2, 1.3  |
-| **[Airplay Audio Output](https://support.apple.com/en-us/102357)** | 🔶 [4] | ✅ |
+| Feature                    | Swiftfin (VLCKit) | Native (AVPlayer) | Enhanced (iOS/iPadOS) |
+|----------------------------|-------------------|-------------------|------------------------|
+| **External Audio Tracks**  | ❌                | ❌                | ❌                     |
+| **Framerate Matching**     | ❌                | ✅                | ✅                     |
+| **HDR to SDR Tonemapping** | ✅ [1]            | 🔶 [2]            | Original AVPlayer picture |
+| **Anime4K Upscaling**      | ❌                | ❌                | ✅ SDR ≤1080p           |
+| **Player Controls**        | Speed, aspect fill, chapters, subtitles, trickplay, audio tracks, customizable UI | Speed, aspect fill | Existing Swiftfin controls plus enhancement modes, A/B comparison, and performance monitor |
+| **Picture-in-Picture**     | ❌                | ✅                | Original AVPlayer picture |
+| **TLS Support**            | 1.1, 1.2 [3]      | 1.1, 1.2, 1.3     | 1.1, 1.2, 1.3          |
+| **[Airplay Audio Output](https://support.apple.com/en-us/102357)** | 🔶 [4] | ✅ | ✅; enhancement bypassed |
 
 **Notes**
 

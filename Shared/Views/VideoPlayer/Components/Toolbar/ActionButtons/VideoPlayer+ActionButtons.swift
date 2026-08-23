@@ -53,6 +53,12 @@ extension VideoPlayer.PlaybackControls.Toolbar {
                 filteredButtons.removeAll { $0 == .subtitles }
             }
 
+            #if os(iOS)
+            if Defaults[.VideoPlayer.videoPlayerType] != .enhanced {
+                filteredButtons.removeAll { $0 == .enhancement }
+            }
+            #endif
+
             return filteredButtons
         }
 
@@ -61,7 +67,16 @@ extension VideoPlayer.PlaybackControls.Toolbar {
         }
 
         private var menuActionButtons: [VideoPlayerActionButton] {
-            resolvedActionButtons(rawMenuActionButtons)
+            var buttons = resolvedActionButtons(rawMenuActionButtons)
+            #if os(iOS)
+            if Defaults[.VideoPlayer.videoPlayerType] == .enhanced,
+               !rawBarActionButtons.contains(.enhancement),
+               !rawMenuActionButtons.contains(.enhancement)
+            {
+                buttons.append(.enhancement)
+            }
+            #endif
+            return buttons
         }
 
         private var menuSystemImage: String {
@@ -82,6 +97,10 @@ extension VideoPlayer.PlaybackControls.Toolbar {
 
         private func isMenuButton(_ button: VideoPlayerActionButton) -> Bool {
             switch button {
+            #if os(iOS)
+            case .enhancement:
+                true
+            #endif
             case .audio, .playbackSpeed, .playbackSettings, .subtitles:
                 true
             default:
@@ -99,6 +118,8 @@ extension VideoPlayer.PlaybackControls.Toolbar {
             case .autoPlay:
                 AutoPlay()
             #if os(iOS)
+            case .enhancement:
+                Enhancement()
             case .gestureLock:
                 GestureLock()
             #endif

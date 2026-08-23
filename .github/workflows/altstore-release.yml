@@ -1,0 +1,160 @@
+name: Publish AltStore Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - altstore-source.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: altstore-release-main
+  cancel-in-progress: true
+
+env:
+  BUNDLE_IDENTIFIER: dev.asion.swiftfin.enhanced
+  IPA_NAME: Swiftfin-Enhanced.ipa
+
+jobs:
+  publish:
+    name: Test, build, and publish
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build tools
+        run: brew bundle --file Brewfile
+
+      - name: Cache Carthage
+        uses: actions/cache@v4
+        with:
+          path: Carthage
+          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile') }}
+          restore-keys: ${{ runner.os }}-carthage-
+
+      - name: Build Carthage dependencies
+        run: carthage update --use-xcframeworks --cache-builds
+
+      - name: Verify and test pinned Anime4KMetal
+        run: |
+          git clone --branch v0.1.2 --depth 1 https://github.com/cinemore/anime4k-metal.git "$RUNNER_TEMP/anime4k-metal"
+          test "$(git -C "$RUNNER_TEMP/anime4k-metal" rev-parse HEAD)" = "60915937f6f391b30d50102533ce6fd98d009174"
+          swift test --package-path "$RUNNER_TEMP/anime4k-metal"
+
+      - name: Test AltStore source generator
+        run: python3 -m unittest Scripts/test_update_altstore_source.py
+
+      - name: Test enhanced player
+        run: |
+          xcodebuild -quiet \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -project Swiftfin.xcodeproj \
+            -scheme Swiftfin \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO \
+            -only-testing:SwiftfinTests \
+            test
+
+      - name: Create release metadata
+        id: metadata
+        run: |
+          year=$(date -u +%Y)
+          month=$(date -u +%m)
+          day=$(date -u +%d)
+          version="$year.$((10#$month)).$((10#$day))"
+          build_version=$(date -u +%s)
+          tag="enhanced-$version-$build_version"
+          release_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          short_sha=$(git rev-parse --short=7 HEAD)
+          {
+            echo "version=$version"
+            echo "build_version=$build_version"
+            echo "tag=$tag"
+            echo "release_date=$release_date"
+            echo "short_sha=$short_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build unsigned device app
+        run: |
+          xcodebuild -quiet \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -project Swiftfin.xcodeproj \
+            -scheme Swiftfin \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/SwiftfinDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_ENTITLEMENTS= \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_IDENTIFIER" \
+            MARKETING_VERSION="${{ steps.metadata.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.metadata.outputs.build_version }}" \
+            build
+
+      - name: Package and verify IPA
+        id: package
+        run: |
+          app="$RUNNER_TEMP/SwiftfinDerivedData/Build/Products/Release-iphoneos/Swiftfin iOS.app"
+          payload="$RUNNER_TEMP/AltStorePayload/Payload"
+          ipa="$RUNNER_TEMP/$IPA_NAME"
+          test -d "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")" = "$BUNDLE_IDENTIFIER"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")" = "${{ steps.metadata.outputs.version }}"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")" = "${{ steps.metadata.outputs.build_version }}"
+          mkdir -p "$payload"
+          ditto --norsrc --noextattr "$app" "$payload/Swiftfin iOS.app"
+          ditto -c -k --norsrc --noextattr --keepParent "$RUNNER_TEMP/AltStorePayload/Payload" "$ipa"
+          test -s "$ipa"
+          unzip -tq "$ipa"
+          if unzip -l "$ipa" | grep -q '__MACOSX'; then
+            echo "IPA contains forbidden Finder metadata"
+            exit 1
+          fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "ipa=$ipa" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          notes="Automated Swiftfin Enhanced build from commit ${{ steps.metadata.outputs.short_sha }}. Includes the iOS/iPadOS Anime4K Metal player. Install through the AltStore Classic source."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${{ steps.package.outputs.ipa }}#$IPA_NAME" --clobber
+          else
+            gh release create "$TAG" "${{ steps.package.outputs.ipa }}#$IPA_NAME" \
+              --title "Swiftfin Enhanced ${{ steps.metadata.outputs.version }} (${{ steps.metadata.outputs.build_version }})" \
+              --notes "$notes"
+          fi
+
+      - name: Update AltStore source
+        env:
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          python3 Scripts/update_altstore_source.py \
+            --source altstore-source.json \
+            --ipa "${{ steps.package.outputs.ipa }}" \
+            --info-plist "${{ steps.package.outputs.app }}/Info.plist" \
+            --date "${{ steps.metadata.outputs.release_date }}" \
+            --download-url "https://github.com/${{ github.repository }}/releases/download/$TAG/$IPA_NAME" \
+            --description "Automated build from ${{ steps.metadata.outputs.short_sha }} with Anime4K Metal enhancement and current upstream Swiftfin changes."
+
+      - name: Commit updated source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add altstore-source.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Update AltStore source for ${{ steps.metadata.outputs.tag }} [skip ci]"
+          git push origin HEAD:main

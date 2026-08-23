@@ -27,6 +27,16 @@
   <img height=75 alt="Download on the Apple App Store" src="./Resources/Download_on_the_App_Store_Badge_US-UK_RGB_blk_092917.svg"/>
 </a>
 
+### Swiftfin Enhanced AltStore source
+
+This fork publishes an unofficial iOS/iPadOS build with optional real-time Anime4K Metal enhancement. Add the following source URL to **AltStore Classic**:
+
+```text
+https://raw.githubusercontent.com/Asion001/Swiftfin/main/altstore-source.json
+```
+
+The source and IPA releases update automatically after conflict-free merges from Jellyfin upstream. See the [AltStore distribution documentation](Documentation/altstore.md) for build and update details.
+
 ## 🛠️ TestFlight
 
 Use the TestFlight version to test new features and bug fixes before being published to the App Store. We are grateful for your time and resources for reporting new bugs.

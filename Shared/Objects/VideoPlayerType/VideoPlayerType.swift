@@ -12,11 +12,18 @@ import JellyfinAPI
 
 enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
 
+    #if os(iOS)
+    case enhanced
+    #endif
     case native
     case swiftfin
 
     var displayTitle: String {
         switch self {
+        #if os(iOS)
+        case .enhanced:
+            VideoEnhancementStrings.title
+        #endif
         case .native:
             L10n.native
         case .swiftfin:
@@ -26,6 +33,10 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
 
     var directPlayProfiles: [DirectPlayProfile] {
         switch self {
+        #if os(iOS)
+        case .enhanced:
+            Self._nativeDirectPlayProfiles
+        #endif
         case .native:
             Self._nativeDirectPlayProfiles
         case .swiftfin:
@@ -35,6 +46,10 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
 
     var transcodingProfiles: [TranscodingProfile] {
         switch self {
+        #if os(iOS)
+        case .enhanced:
+            Self._nativeTranscodingProfiles
+        #endif
         case .native:
             Self._nativeTranscodingProfiles
         case .swiftfin:
@@ -44,6 +59,10 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable {
 
     var subtitleProfiles: [SubtitleProfile] {
         switch self {
+        #if os(iOS)
+        case .enhanced:
+            Self._nativeSubtitleProfiles
+        #endif
         case .native:
             Self._nativeSubtitleProfiles
         case .swiftfin:

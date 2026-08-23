@@ -39,8 +39,8 @@ struct VideoPlayer: View {
     @StateObject
     private var containerState: VideoPlayerContainerState = .init()
 
-    init() {
-        self._proxy = .init(wrappedValue: VLCMediaPlayerProxy())
+    init(proxy: (any VideoMediaPlayerProxy)? = nil) {
+        self._proxy = .init(wrappedValue: proxy ?? VLCMediaPlayerProxy())
     }
 
     var body: some View {

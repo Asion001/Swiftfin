@@ -1,0 +1,57 @@
+name: Enhanced Player CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: enhanced-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Anime4K integration tests
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: brew bundle --file Brewfile
+
+      - name: Cache Carthage
+        uses: actions/cache@v4
+        with:
+          path: Carthage
+          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile') }}
+          restore-keys: ${{ runner.os }}-carthage-
+
+      - name: Build Carthage dependencies
+        run: carthage update --use-xcframeworks --cache-builds
+
+      - name: Verify and test pinned Anime4KMetal
+        run: |
+          git clone --branch v0.1.2 --depth 1 https://github.com/cinemore/anime4k-metal.git "$RUNNER_TEMP/anime4k-metal"
+          test "$(git -C "$RUNNER_TEMP/anime4k-metal" rev-parse HEAD)" = "60915937f6f391b30d50102533ce6fd98d009174"
+          swift test --package-path "$RUNNER_TEMP/anime4k-metal"
+
+      - name: Test AltStore source generator
+        run: python3 -m unittest Scripts/test_update_altstore_source.py
+
+      - name: Test enhanced player
+        run: |
+          xcodebuild -quiet \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -project Swiftfin.xcodeproj \
+            -scheme Swiftfin \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO \
+            -only-testing:SwiftfinTests \
+            test

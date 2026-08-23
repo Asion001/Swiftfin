@@ -19,6 +19,15 @@ struct VideoPlayerSettingsView: View {
     typealias PlatformPicker = Picker
     #endif
 
+    #if os(iOS)
+    @Default(.VideoPlayer.videoPlayerType)
+    private var videoPlayerType
+    @Default(.VideoPlayer.enhancementMode)
+    private var enhancementMode
+    @Default(.VideoPlayer.enhancementPerformanceHUD)
+    private var enhancementPerformanceHUD
+    #endif
+
     // MARK: - Button Defaults
 
     @Default(.VideoPlayer.jumpBackwardInterval)
@@ -82,6 +91,10 @@ struct VideoPlayerSettingsView: View {
     var body: some View {
         Form(systemImage: "tv") {
             #if os(iOS)
+            enhancementSettings
+            #endif
+
+            #if os(iOS)
             gestureSettings
             #endif
 
@@ -110,6 +123,25 @@ struct VideoPlayerSettingsView: View {
             }
         }
     }
+
+    #if os(iOS)
+    @ViewBuilder
+    private var enhancementSettings: some View {
+        Section {
+            Picker(L10n.videoPlayerType, selection: $videoPlayerType)
+
+            Picker(VideoEnhancementStrings.title, selection: $enhancementMode)
+                .disabled(videoPlayerType != .enhanced)
+
+            Toggle(VideoEnhancementStrings.performance, isOn: $enhancementPerformanceHUD)
+                .disabled(videoPlayerType != .enhanced)
+        } header: {
+            Text(VideoEnhancementStrings.title)
+        } footer: {
+            Text(VideoEnhancementStrings.energyWarning)
+        }
+    }
+    #endif
 
     // MARK: - Gesture Settings
 

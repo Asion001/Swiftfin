@@ -21,7 +21,14 @@ import SwiftUI
 // TODO: have set seconds with completion handler
 
 @MainActor
-class AVMediaPlayerProxy: VideoMediaPlayerProxy {
+class AVMediaPlayerProxy: VideoMediaPlayerProxy, MediaPlayerTrackRebuildPolicy {
+
+    enum Presentation {
+        case layer
+        #if os(iOS)
+        case enhanced
+        #endif
+    }
 
     let isBuffering: PublishedBox<Bool> = .init(initialValue: false)
     var isScrubbing: Binding<Bool> = .constant(false)
@@ -32,6 +39,19 @@ class AVMediaPlayerProxy: VideoMediaPlayerProxy {
 
     let avPlayerLayer: AVPlayerLayer
     let player: AVPlayer
+    let presentation: Presentation
+
+    #if os(iOS)
+    let enhancementController: VideoEnhancementController?
+    #endif
+
+    var requiresTrackRebuild: Bool {
+        #if os(iOS)
+        presentation == .enhanced
+        #else
+        false
+        #endif
+    }
 
 //    private var rateObserver: NSKeyValueObservation!
     private var statusObserver: NSKeyValueObservation!
@@ -73,9 +93,17 @@ class AVMediaPlayerProxy: VideoMediaPlayerProxy {
         NowPlayableObserver(),
     ]
 
-    init() {
-        self.player = AVPlayer()
+    init(presentation: Presentation = .layer) {
+        let player = AVPlayer()
+        self.player = player
         self.avPlayerLayer = AVPlayerLayer(player: player)
+        self.presentation = presentation
+
+        #if os(iOS)
+        self.enhancementController = presentation == .enhanced
+            ? VideoEnhancementController(player: player)
+            : nil
+        #endif
 
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 1, preferredTimescale: 1000),
@@ -101,6 +129,9 @@ class AVMediaPlayerProxy: VideoMediaPlayerProxy {
 
     func stop() {
         player.pause()
+        #if os(iOS)
+        enhancementController?.invalidate()
+        #endif
     }
 
     func jumpForward(_ seconds: Duration) {
@@ -127,11 +158,27 @@ class AVMediaPlayerProxy: VideoMediaPlayerProxy {
 
     func setAspectFill(_ aspectFill: Bool) {
         avPlayerLayer.videoGravity = aspectFill ? .resizeAspectFill : .resizeAspect
+        #if os(iOS)
+        enhancementController?.isAspectFilled = aspectFill
+        #endif
     }
 
+    @ViewBuilder
     var videoPlayerBody: some View {
+        #if os(iOS)
+        if let enhancementController {
+            EnhancedVideoPlayerView(
+                controller: enhancementController,
+                avPlayerLayer: avPlayerLayer
+            )
+        } else {
+            AVPlayerView()
+                .environmentObject(self)
+        }
+        #else
         AVPlayerView()
             .environmentObject(self)
+        #endif
     }
 }
 
@@ -139,6 +186,10 @@ extension AVMediaPlayerProxy {
 
     private func playbackStopped() {
         player.pause()
+
+        #if os(iOS)
+        enhancementController?.invalidate()
+        #endif
 
         if let timeObserver {
             DispatchQueue.main.async {
@@ -165,6 +216,10 @@ extension AVMediaPlayerProxy {
         newAVPlayerItem.externalMetadata = item.baseItem.avMetadata
 
         player.replaceCurrentItem(with: newAVPlayerItem)
+
+        #if os(iOS)
+        enhancementController?.configure(playerItem: newAVPlayerItem, mediaPlayerItem: item)
+        #endif
 
         // TODO: protect against paused
 //        rateObserver = player.observe(\.rate, options: [.new, .initial]) { _, value in

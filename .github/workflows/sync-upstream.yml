@@ -1,0 +1,82 @@
+name: Sync Jellyfin Upstream
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+
+concurrency:
+  group: upstream-sync-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge conflict-free upstream changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/jellyfin/Swiftfin.git
+          git fetch upstream main
+
+      - name: Merge and push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Fork already contains the latest upstream main." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          set +e
+          git merge --no-edit upstream/main
+          merge_status=$?
+          set -e
+
+          if [ "$merge_status" -ne 0 ]; then
+            conflicts=$(git diff --name-only --diff-filter=U)
+            git merge --abort
+            {
+              echo "## Upstream sync needs attention"
+              echo
+              echo "The automatic merge stopped without changing main. Conflicting files:"
+              echo '```'
+              echo "$conflicts"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            if [ "$(gh api "repos/${{ github.repository }}" --jq .has_issues)" = "true" ]; then
+              issue_number=$(gh issue list --state open --search 'Upstream sync conflict in:title' --json number --jq '.[0].number // empty')
+              body="Automatic sync with jellyfin/Swiftfin main found conflicts and left the fork unchanged. Conflicting files:\n\n$conflicts\n\nSee workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              if [ -n "$issue_number" ]; then
+                gh issue comment "$issue_number" --body "$body"
+              else
+                gh issue create --title "Upstream sync conflict" --body "$body"
+              fi
+            fi
+            exit 1
+          fi
+
+          git push origin HEAD:main
+          gh workflow run altstore-release.yml --ref main
+
+          if [ "$(gh api "repos/${{ github.repository }}" --jq .has_issues)" = "true" ]; then
+            issue_number=$(gh issue list --state open --search 'Upstream sync conflict in:title' --json number --jq '.[0].number // empty')
+            if [ -n "$issue_number" ]; then
+              gh issue close "$issue_number" --comment "Automatic upstream synchronization is working again."
+            fi
+          fi

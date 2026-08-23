@@ -14,6 +14,7 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
     case audio
     case autoPlay
     #if os(iOS)
+    case enhancement
     case gestureLock
     #endif
     case playbackSpeed
@@ -31,6 +32,8 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
         case .autoPlay:
             L10n.autoPlay
         #if os(iOS)
+        case .enhancement:
+            VideoEnhancementStrings.title
         case .gestureLock:
             L10n.gestureLock
         #endif
@@ -87,6 +90,7 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
         case .aspectFill: "arrow.up.left.and.arrow.down.right"
         case .audio: "speaker.wave.2.fill"
         case .autoPlay: usesLiquidGlassSymbols ? "play.fill" : "play.circle.fill"
+        case .enhancement: "sparkles"
         case .gestureLock: usesLiquidGlassSymbols ? "lock.fill" : "lock.circle.fill"
         case .playbackSpeed: "speedometer"
         case .playbackSettings: usesLiquidGlassSymbols ? "tv" : "tv.circle.fill"
@@ -107,6 +111,7 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
                 "stop.circle"
             }
         case .gestureLock: "lock.open.fill"
+        case .enhancement: systemImage
         case .subtitles: "captions.bubble"
         default:
             systemImage
@@ -121,10 +126,22 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
         .playNextItem,
     ]
 
-    static let defaultMenuActionButtons: [VideoPlayerActionButton] = [
-        .audio,
-        .subtitles,
-        .playbackSpeed,
-        .playbackSettings,
-    ]
+    static var defaultMenuActionButtons: [VideoPlayerActionButton] {
+        #if os(iOS)
+        [
+            .audio,
+            .subtitles,
+            .enhancement,
+            .playbackSpeed,
+            .playbackSettings,
+        ]
+        #else
+        [
+            .audio,
+            .subtitles,
+            .playbackSpeed,
+            .playbackSettings,
+        ]
+        #endif
+    }
 }

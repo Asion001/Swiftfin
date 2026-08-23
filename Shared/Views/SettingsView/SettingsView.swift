@@ -144,6 +144,12 @@ struct SettingsView: View {
                 L10n.native,
                 value: L10n.playerNativeDescription
             )
+            #if os(iOS)
+            LabeledContent(
+                VideoEnhancementStrings.title,
+                value: VideoEnhancementStrings.enhancedPlayerDescription
+            )
+            #endif
         }
     }
 
