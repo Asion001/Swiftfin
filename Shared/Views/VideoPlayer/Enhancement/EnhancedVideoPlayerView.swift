@@ -111,7 +111,7 @@ private final class EnhancedPlayerUIView: UIView, MTKViewDelegate {
         let usesNativeLayer = controller.isUsingNativePlaybackLayer
         avPlayerLayer.isHidden = !usesNativeLayer
         metalView.isHidden = usesNativeLayer
-        metalView.isPaused = usesNativeLayer
+        metalView.isPaused = controller.isPictureInPictureActive
         avPlayerLayer.videoGravity = controller.isAspectFilled ? .resizeAspectFill : .resizeAspect
         metalView.preferredFramesPerSecond = EnhancementFramePacing.preferredFramesPerSecond(
             sourceFrameRate: controller.sourceFrameRate,
