@@ -45,6 +45,11 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                     .disabled(controller.bypassReason != nil)
 
                     Toggle(
+                        VideoEnhancementStrings.matchSourceFrameRate,
+                        isOn: $controller.matchesSourceFrameRate
+                    )
+
+                    Toggle(
                         VideoEnhancementStrings.performance,
                         isOn: $controller.showsPerformanceHUD
                     )

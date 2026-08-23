@@ -122,6 +122,10 @@ enum VideoEnhancementBypassReason: Equatable, Sendable {
 enum VideoEnhancementStrings {
     static let title = String(localized: "enhancement.title", defaultValue: "Anime enhancement")
     static let comparison = String(localized: "enhancement.comparison", defaultValue: "A/B comparison")
+    static let matchSourceFrameRate = String(
+        localized: "enhancement.match-source-frame-rate",
+        defaultValue: "Match source FPS"
+    )
     static let performance = String(localized: "enhancement.performance", defaultValue: "Performance monitor")
     static let energyWarning = String(
         localized: "enhancement.energy-warning",
@@ -130,6 +134,10 @@ enum VideoEnhancementStrings {
     static let enhancedPlayerDescription = String(
         localized: "enhancement.player-description",
         defaultValue: "Uses Apple's AVPlayer with real-time Anime4K Metal enhancement. Unsupported formats may be remuxed or transcoded by Jellyfin. HDR, AirPlay, and Picture in Picture use the original picture."
+    )
+    static let frameRateExplanation = String(
+        localized: "enhancement.frame-rate-explanation",
+        defaultValue: "Match source FPS reduces presentation work and repeats each enhanced source frame at its original cadence. It does not create interpolated frames. Turn it off to present at the display's maximum refresh rate."
     )
 }
 

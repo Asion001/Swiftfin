@@ -75,6 +75,51 @@ final class VideoEnhancementTests: XCTestCase {
         XCTAssertEqual(Anime4KFrameProcessor.presetRawValue(for: .quality), "modeAAHQ")
     }
 
+    func testFramePacingUsesSourceCadenceOrDisplayMaximum() {
+        XCTAssertEqual(EnhancementFramePacing.preferredFramesPerSecond(
+            sourceFrameRate: 23.976,
+            maximumFramesPerSecond: 120,
+            matchesSourceFrameRate: true
+        ), 24)
+        XCTAssertEqual(EnhancementFramePacing.preferredFramesPerSecond(
+            sourceFrameRate: 59.94,
+            maximumFramesPerSecond: 60,
+            matchesSourceFrameRate: true
+        ), 60)
+        XCTAssertEqual(EnhancementFramePacing.preferredFramesPerSecond(
+            sourceFrameRate: 24,
+            maximumFramesPerSecond: 120,
+            matchesSourceFrameRate: false
+        ), 120)
+    }
+
+    func testFramePacingPreferencePersistence() {
+        let key = "videoEnhancementMatchesSourceFrameRate"
+        let defaults = UserDefaults.currentUserSuite
+        let original = defaults.object(forKey: key)
+        defer {
+            if let original {
+                defaults.set(original, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        defaults.set(false, forKey: key)
+        XCTAssertFalse(defaults.bool(forKey: key))
+        defaults.set(true, forKey: key)
+        XCTAssertTrue(defaults.bool(forKey: key))
+    }
+
+    func testLatestFrameQueueHoldsPresentedFrameAndOnlyDropsSupersededPendingFrames() {
+        var queue = LatestFrameQueue<Int>()
+
+        XCTAssertFalse(queue.enqueue(2))
+        XCTAssertTrue(queue.enqueue(3))
+        XCTAssertEqual(queue.dequeue(), 3)
+        XCTAssertNil(queue.dequeue())
+    }
+
     func testModePersistence() {
         let key = "videoEnhancementMode"
         let defaults = UserDefaults.currentUserSuite

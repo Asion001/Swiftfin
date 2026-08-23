@@ -112,6 +112,11 @@ private final class EnhancedPlayerUIView: UIView, MTKViewDelegate {
         avPlayerLayer.isHidden = !usesNativeLayer
         metalView.isHidden = usesNativeLayer
         avPlayerLayer.videoGravity = controller.isAspectFilled ? .resizeAspectFill : .resizeAspect
+        metalView.preferredFramesPerSecond = EnhancementFramePacing.preferredFramesPerSecond(
+            sourceFrameRate: controller.sourceFrameRate,
+            maximumFramesPerSecond: UIScreen.main.maximumFramesPerSecond,
+            matchesSourceFrameRate: controller.matchesSourceFrameRate
+        )
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -222,13 +227,18 @@ private struct VideoEnhancementPerformanceHUD: View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Anime4K \(controller.requestedMode.displayTitle) → \(controller.activeLevel.displayTitle)")
             Text("\(sourceResolution) → \(outputResolution)")
-            Text(String(format: "source %.1f fps · display %.1f fps", controller.sourceFrameRate, controller.displayFrameRate))
+            Text(String(
+                format: "source %.1f fps · renderer %.1f fps%@",
+                controller.sourceFrameRate,
+                controller.displayFrameRate,
+                controller.matchesSourceFrameRate ? " matched" : " max"
+            ))
             Text(String(
                 format: "GPU %.2f ms avg · %.2f ms p95",
                 controller.averageProcessingTime * 1000,
                 controller.percentile95ProcessingTime * 1000
             ))
-            Text("drops \(controller.enhancedDroppedFrames) enhanced · \(controller.avPlayerDroppedFrames) player")
+            Text("drops \(controller.enhancedDroppedFrames) queued · \(controller.avPlayerDroppedFrames) player")
             Text("thermal \(thermalState) · low power \(ProcessInfo.processInfo.isLowPowerModeEnabled ? "on" : "off")")
 
             if let bypassReason = controller.bypassReason {

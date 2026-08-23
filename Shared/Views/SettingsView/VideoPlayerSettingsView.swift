@@ -24,6 +24,8 @@ struct VideoPlayerSettingsView: View {
     private var videoPlayerType
     @Default(.VideoPlayer.enhancementMode)
     private var enhancementMode
+    @Default(.VideoPlayer.enhancementMatchesSourceFrameRate)
+    private var enhancementMatchesSourceFrameRate
     @Default(.VideoPlayer.enhancementPerformanceHUD)
     private var enhancementPerformanceHUD
     #endif
@@ -133,12 +135,18 @@ struct VideoPlayerSettingsView: View {
             Picker(VideoEnhancementStrings.title, selection: $enhancementMode)
                 .disabled(videoPlayerType != .enhanced)
 
+            Toggle(
+                VideoEnhancementStrings.matchSourceFrameRate,
+                isOn: $enhancementMatchesSourceFrameRate
+            )
+            .disabled(videoPlayerType != .enhanced)
+
             Toggle(VideoEnhancementStrings.performance, isOn: $enhancementPerformanceHUD)
                 .disabled(videoPlayerType != .enhanced)
         } header: {
             Text(VideoEnhancementStrings.title)
         } footer: {
-            Text(VideoEnhancementStrings.energyWarning)
+            Text("\(VideoEnhancementStrings.energyWarning)\n\n\(VideoEnhancementStrings.frameRateExplanation)")
         }
     }
     #endif

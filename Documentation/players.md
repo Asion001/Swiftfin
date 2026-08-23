@@ -12,6 +12,15 @@ unsupported pixel formats, and constrained device states automatically use the
 original AVPlayer picture. Auto mode adapts quality to frame timing, Low Power
 Mode, and thermal state. Enhanced is currently unavailable on tvOS.
 
+Enhanced frame pacing matches the source cadence by default. This does not
+interpolate new frames: a 24 fps source remains 24 unique frames per second.
+The Metal renderer holds the last completed enhanced frame while a bounded
+one-frame, latest-wins queue absorbs short processing spikes. This prevents
+alternation between original and enhanced frames and avoids unbounded video
+latency. Source-FPS matching can be toggled in settings or during playback;
+turning it off presents the latest processed frame at the display's maximum
+refresh rate.
+
 All iOS/iPadOS player modes include a session sleep timer in the playback menu.
 It offers 15, 30, 45, 60, and 90 minute presets, a custom duration, extension,
 live countdown, and cancellation. The deadline follows wall-clock time through

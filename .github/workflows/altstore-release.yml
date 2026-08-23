@@ -128,7 +128,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.metadata.outputs.tag }}
         run: |
-          notes="Automated Swiftfin Enhanced build from commit ${{ steps.metadata.outputs.short_sha }}. Includes the iOS/iPadOS Anime4K Metal player and playback sleep timer. Install through the AltStore Classic source."
+          notes="Automated Swiftfin Enhanced build from commit ${{ steps.metadata.outputs.short_sha }}. Includes the iOS/iPadOS Anime4K Metal player, source-FPS frame pacing, bounded processing buffering, and playback sleep timer. Install through the AltStore Classic source."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${{ steps.package.outputs.ipa }}#$IPA_NAME" --clobber
           else
@@ -147,7 +147,7 @@ jobs:
             --info-plist "${{ steps.package.outputs.app }}/Info.plist" \
             --date "${{ steps.metadata.outputs.release_date }}" \
             --download-url "https://github.com/${{ github.repository }}/releases/download/$TAG/$IPA_NAME" \
-            --description "Automated build from ${{ steps.metadata.outputs.short_sha }} with Anime4K Metal enhancement, playback sleep timer, and current upstream Swiftfin changes."
+            --description "Automated build from ${{ steps.metadata.outputs.short_sha }} with Anime4K Metal enhancement, source-FPS frame pacing, bounded processing buffering, playback sleep timer, and current upstream Swiftfin changes."
 
       - name: Commit updated source
         run: |

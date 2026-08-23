@@ -299,6 +299,10 @@ extension Defaults.Keys {
             UserKey("videoEnhancementMode", default: .auto)
         }
 
+        static var enhancementMatchesSourceFrameRate: Key<Bool> {
+            UserKey("videoEnhancementMatchesSourceFrameRate", default: true)
+        }
+
         static var enhancementPerformanceHUD: Key<Bool> {
             UserKey("videoEnhancementPerformanceHUD", default: false)
         }

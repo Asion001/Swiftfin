@@ -46,6 +46,11 @@ final class VideoEnhancementController: ObservableObject {
     @Published
     var isComparisonEnabled = false
     @Published
+    var matchesSourceFrameRate: Bool {
+        didSet { Defaults[.VideoPlayer.enhancementMatchesSourceFrameRate] = matchesSourceFrameRate }
+    }
+
+    @Published
     var isPictureInPictureActive = false {
         didSet { refreshBypassReason() }
     }
@@ -80,6 +85,7 @@ final class VideoEnhancementController: ObservableObject {
     private var isLiveStream = false
     private var isPixelFormatSupported = true
     private var isProcessingFrame = false
+    private var pendingFrames = LatestFrameQueue<VideoFrameContext>()
     private var memoryRecoveryWorkItem: DispatchWorkItem?
     private var notificationTokens: [NSObjectProtocol] = []
     private var processingFailureGeneration: Int64?
@@ -94,6 +100,7 @@ final class VideoEnhancementController: ObservableObject {
     init(player: AVPlayer) {
         self.player = player
         self.requestedMode = Defaults[.VideoPlayer.enhancementMode]
+        self.matchesSourceFrameRate = Defaults[.VideoPlayer.enhancementMatchesSourceFrameRate]
         self.showsPerformanceHUD = Defaults[.VideoPlayer.enhancementPerformanceHUD]
 
         let attributes: [String: Any] = [
@@ -150,6 +157,7 @@ final class VideoEnhancementController: ObservableObject {
         averageProcessingTime = 0
         percentile95ProcessingTime = 0
         isProcessingFrame = false
+        pendingFrames.removeAll()
         isComparisonEnabled = false
         processingFailureGeneration = nil
         refreshActiveLevel()
@@ -164,6 +172,7 @@ final class VideoEnhancementController: ObservableObject {
         currentItem = nil
         latestPixelBuffer = nil
         isProcessingFrame = false
+        pendingFrames.removeAll()
         isPixelFormatSupported = true
         processingFailureGeneration = nil
         processor?.invalidate(sessionGeneration: sessionGeneration)
@@ -197,20 +206,10 @@ final class VideoEnhancementController: ObservableObject {
             return
         }
 
-        if isProcessingFrame {
-            latestPixelBuffer = pixelBuffer
-            enhancedDroppedFrames += 1
-            recordSample(duration: 0, wasDropped: true, at: hostTime)
-            return
-        }
-
         guard let processor else {
             refreshBypassReason()
             return
         }
-
-        latestPixelBuffer = latestPixelBuffer ?? pixelBuffer
-        isProcessingFrame = true
 
         let generation = sessionGeneration
         let level = activeLevel
@@ -230,6 +229,21 @@ final class VideoEnhancementController: ObservableObject {
             level: level,
             isComparisonEnabled: comparisonEnabled
         )
+
+        if isProcessingFrame {
+            if pendingFrames.enqueue(context) {
+                enhancedDroppedFrames += 1
+                recordSample(duration: 0, wasDropped: true, at: hostTime)
+            }
+            return
+        }
+
+        latestPixelBuffer = latestPixelBuffer ?? pixelBuffer
+        process(context, with: processor)
+    }
+
+    private func process(_ context: VideoFrameContext, with processor: any VideoFrameProcessor) {
+        isProcessingFrame = true
         let startedAt = CACurrentMediaTime()
 
         processingQueue.async { [weak self] in
@@ -242,11 +256,12 @@ final class VideoEnhancementController: ObservableObject {
             let duration = CACurrentMediaTime() - startedAt
 
             Task { @MainActor [weak self] in
-                guard let self, generation == self.sessionGeneration else { return }
+                guard let self, context.sessionGeneration == self.sessionGeneration else { return }
                 self.isProcessingFrame = false
 
                 switch result {
                 case .passthrough:
+                    self.pendingFrames.removeAll()
                     self.latestPixelBuffer = context.pixelBuffer
                     self.temporarilyBypassAfterProcessingFailure()
                 case let .replace(output):
@@ -258,6 +273,10 @@ final class VideoEnhancementController: ObservableObject {
                 }
 
                 self.recordSample(duration: duration, wasDropped: false, at: CACurrentMediaTime())
+
+                if let pendingFrame = self.pendingFrames.dequeue(), self.bypassReason == nil {
+                    self.process(pendingFrame, with: processor)
+                }
             }
         }
     }
