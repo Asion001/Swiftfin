@@ -171,9 +171,6 @@ struct VideoPlayer: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
             .presentationContentInteraction(.scrolls)
-            .onDisappear {
-                containerState.presentedModal = nil
-            }
         }
         #endif
     }
