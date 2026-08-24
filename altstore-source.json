@@ -23,6 +23,17 @@
       "versions": [
         {
           "version": "2026.8.24",
+          "buildVersion": "1787590736",
+          "marketingVersion": "Enhanced 2026.8.24 (1787590736)",
+          "date": "2026-08-24T16:58:56Z",
+          "localizedDescription": "Automated build from aac8ad4 with selectable MetalFX and experimental Anime4K enhancement, a visible orientation- and color-safe A/B comparison, stable player dialogs, Apple Pencil-safe controls, zoom-to-fill cropping, realtime quality profiles, source-FPS frame pacing, bounded processing buffering, PiP suspension, customizable subtitles, playback sleep timer, and current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.24-1787590736/Swiftfin-Enhanced.ipa",
+          "size": 183209149,
+          "sha256": "69b84141a191470724f6f881e92895976f18202bacbd80f446150bc95957bc5f",
+          "minOSVersion": "18.6"
+        },
+        {
+          "version": "2026.8.24",
           "buildVersion": "1787552163",
           "marketingVersion": "Enhanced 2026.8.24 (1787552163)",
           "date": "2026-08-24T06:16:03Z",
