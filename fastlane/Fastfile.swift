@@ -264,7 +264,7 @@ class Fastfile: LaneFile {
             exportMethod: .userDefined("development"),
             skipArchive: .userDefined(true),
             skipCodesigning: .userDefined(true),
-            xcargs: .userDefined("-skipMacroValidation"),
+            xcargs: .userDefined("-skipMacroValidation -skipPackagePluginValidation"),
             skipProfileDetection: true
         )
     }
