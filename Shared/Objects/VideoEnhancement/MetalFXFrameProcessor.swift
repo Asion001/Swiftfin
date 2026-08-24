@@ -13,11 +13,13 @@ import Foundation
 import Metal
 #if !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
 import MetalFX
+import MetalPerformanceShaders
 
 final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
     static let engineDisplayName = "MetalFX"
 
     enum ProcessorError: Error {
+        case blitEncoderCreationFailed
         case commandBufferCreationFailed
         case commandBufferFailed
         case inputTextureCreationFailed
@@ -37,11 +39,13 @@ final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
     private let ciContext: CIContext
     private let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
     private let commandQueue: any MTLCommandQueue
+    private let comparisonScaler: MPSImageBilinearScale
     private let device: any MTLDevice
     private let lock = NSLock()
     private let textureCache: CVMetalTextureCache
 
     private var configuration: Configuration?
+    private var comparisonTexture: (any MTLTexture)?
     private var croppedInputTexture: (any MTLTexture)?
     private var needsDrain = false
     private var outputPool: CVPixelBufferPool?
@@ -67,6 +71,7 @@ final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
 
         self.device = device
         self.commandQueue = commandQueue
+        self.comparisonScaler = MPSImageBilinearScale(device: device)
         self.textureCache = textureCache
         self.ciContext = CIContext(mtlDevice: device, options: [
             .cacheIntermediates: false,
@@ -113,18 +118,23 @@ final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
             throw ProcessorError.commandBufferCreationFailed
         }
 
+        guard let sourceTexture = makePixelBufferTexture(
+            context.pixelBuffer,
+            width: CVPixelBufferGetWidth(context.pixelBuffer),
+            height: CVPixelBufferGetHeight(context.pixelBuffer)
+        ) else { throw ProcessorError.inputTextureCreationFailed }
+
         let inputTexture: any MTLTexture
         if context.visibleSourceSize != nil {
             guard let croppedInputTexture else { throw ProcessorError.inputTextureCreationFailed }
-            renderCroppedInput(context, to: croppedInputTexture, commandBuffer: commandBuffer)
+            try copyCenteredCrop(
+                from: sourceTexture,
+                to: croppedInputTexture,
+                commandBuffer: commandBuffer
+            )
             inputTexture = croppedInputTexture
         } else {
-            guard let texture = makePixelBufferTexture(
-                context.pixelBuffer,
-                width: requestedConfiguration.inputWidth,
-                height: requestedConfiguration.inputHeight
-            ) else { throw ProcessorError.inputTextureCreationFailed }
-            inputTexture = texture
+            inputTexture = sourceTexture
         }
 
         scaler.colorTexture = inputTexture
@@ -133,12 +143,25 @@ final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
         scaler.outputTexture = outputTexture
         scaler.encode(commandBuffer: commandBuffer)
 
-        guard var enhancedImage = CIImage(
+        let comparisonBaselineTexture: (any MTLTexture)?
+        if context.isComparisonEnabled {
+            let texture = try makeComparisonTextureIfNeeded(configuration: requestedConfiguration)
+            comparisonScaler.encode(
+                commandBuffer: commandBuffer,
+                sourceTexture: inputTexture,
+                destinationTexture: texture
+            )
+            comparisonBaselineTexture = texture
+        } else {
+            comparisonBaselineTexture = nil
+        }
+
+        guard let metalFXImage = CIImage(
             mtlTexture: outputTexture,
             options: [.colorSpace: colorSpace]
         ) else { throw ProcessorError.outputTextureCreationFailed }
 
-        enhancedImage = enhancedImage.applyingFilter(
+        let enhancedImage = metalFXImage.applyingFilter(
             "CISharpenLuminance",
             parameters: [kCIInputSharpnessKey: Self.sharpness(for: context.level)]
         )
@@ -151,7 +174,12 @@ final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
         )
         let imageToRender: CIImage
         if context.isComparisonEnabled {
-            let original = scaledOriginalImage(context, outputBounds: outputBounds)
+            guard let comparisonBaselineTexture,
+                  let originalImage = CIImage(
+                      mtlTexture: comparisonBaselineTexture,
+                      options: [.colorSpace: colorSpace]
+                  )
+            else { throw ProcessorError.outputTextureCreationFailed }
             let black = CIImage(color: .black).cropped(to: outputBounds)
             let enhancedHalf = CGRect(
                 x: outputBounds.midX,
@@ -163,7 +191,10 @@ final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
                 .cropped(to: enhancedHalf)
                 .composited(over: black)
             imageToRender = enhancedImage.applyingFilter("CIBlendWithMask", parameters: [
-                kCIInputBackgroundImageKey: original,
+                // Both scaling paths read the same raw Metal input texture.
+                // The left uses a plain bilinear presentation baseline while
+                // the right uses MetalFX plus the selected edge profile.
+                kCIInputBackgroundImageKey: originalImage,
                 kCIInputMaskImageKey: mask,
             ])
         } else {
@@ -264,6 +295,7 @@ final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
         self.scaler = scaler
         self.outputTexture = outputTexture
         self.croppedInputTexture = croppedInputTexture
+        comparisonTexture = nil
         outputPool = Self.makeOutputPool(configuration: requested)
     }
 
@@ -307,55 +339,65 @@ final class MetalFXFrameProcessor: VideoFrameProcessor, @unchecked Sendable {
         return texture
     }
 
-    private func renderCroppedInput(
-        _ context: VideoFrameContext,
-        to texture: any MTLTexture,
+    private func copyCenteredCrop(
+        from sourceTexture: any MTLTexture,
+        to destinationTexture: any MTLTexture,
         commandBuffer: any MTLCommandBuffer
-    ) {
-        let source = CIImage(cvPixelBuffer: context.pixelBuffer)
-        let textureWidth = CGFloat(texture.width)
-        let textureHeight = CGFloat(texture.height)
-        let cropRect = CGRect(
-            x: source.extent.midX - textureWidth / 2,
-            y: source.extent.midY - textureHeight / 2,
-            width: textureWidth,
-            height: textureHeight
+    ) throws {
+        guard let blitEncoder = commandBuffer.makeBlitCommandEncoder() else {
+            throw ProcessorError.blitEncoderCreationFailed
+        }
+        let sourceOrigin = MTLOrigin(
+            x: max(0, (sourceTexture.width - destinationTexture.width) / 2),
+            y: max(0, (sourceTexture.height - destinationTexture.height) / 2),
+            z: 0
         )
-        let cropped = source
-            .cropped(to: cropRect)
-            .transformed(by: CGAffineTransform(translationX: -cropRect.minX, y: -cropRect.minY))
-        ciContext.render(
-            cropped,
-            to: texture,
-            commandBuffer: commandBuffer,
-            bounds: CGRect(x: 0, y: 0, width: textureWidth, height: textureHeight),
-            colorSpace: colorSpace
+        blitEncoder.copy(
+            from: sourceTexture,
+            sourceSlice: 0,
+            sourceLevel: 0,
+            sourceOrigin: sourceOrigin,
+            sourceSize: MTLSize(
+                width: destinationTexture.width,
+                height: destinationTexture.height,
+                depth: 1
+            ),
+            to: destinationTexture,
+            destinationSlice: 0,
+            destinationLevel: 0,
+            destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
         )
+        blitEncoder.endEncoding()
     }
 
-    private func scaledOriginalImage(_ context: VideoFrameContext, outputBounds: CGRect) -> CIImage {
-        var original = CIImage(cvPixelBuffer: context.pixelBuffer)
-        if let visibleSourceSize = context.visibleSourceSize {
-            let cropRect = CGRect(
-                x: original.extent.midX - visibleSourceSize.width / 2,
-                y: original.extent.midY - visibleSourceSize.height / 2,
-                width: visibleSourceSize.width,
-                height: visibleSourceSize.height
-            )
-            original = original
-                .cropped(to: cropRect)
-                .transformed(by: CGAffineTransform(translationX: -cropRect.minX, y: -cropRect.minY))
+    private func makeComparisonTextureIfNeeded(
+        configuration: Configuration
+    ) throws -> any MTLTexture {
+        if let comparisonTexture,
+           comparisonTexture.width == configuration.outputWidth,
+           comparisonTexture.height == configuration.outputHeight
+        {
+            return comparisonTexture
         }
-        return original
-            .transformed(by: CGAffineTransform(
-                scaleX: outputBounds.width / original.extent.width,
-                y: outputBounds.height / original.extent.height
-            ))
-            .cropped(to: outputBounds)
+
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm_srgb,
+            width: configuration.outputWidth,
+            height: configuration.outputHeight,
+            mipmapped: false
+        )
+        descriptor.storageMode = .private
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        guard let texture = device.makeTexture(descriptor: descriptor) else {
+            throw ProcessorError.outputTextureCreationFailed
+        }
+        comparisonTexture = texture
+        return texture
     }
 
     private func resetResources() {
         configuration = nil
+        comparisonTexture = nil
         croppedInputTexture = nil
         outputPool = nil
         outputTexture = nil
