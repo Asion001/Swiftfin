@@ -122,8 +122,11 @@ private struct FirstTabSettingsBarButton: View {
     @Router
     private var router
 
+    @EnvironmentObject
+    private var navigationCoordinator: NavigationCoordinator
+
     var body: some View {
-        if router.isRootOfPath,
+        if navigationCoordinator.path.isEmpty,
            let userSession
         {
             SettingsBarButton(

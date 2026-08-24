@@ -16,6 +16,52 @@ import Metal
 import QuartzCore
 import UIKit
 
+struct EnhancedSubtitleTimeline {
+    struct Event {
+        let presentationTime: CMTime
+        let text: String?
+    }
+
+    private(set) var events: [Event] = []
+
+    mutating func record(text: String?, at presentationTime: CMTime) {
+        guard presentationTime.isValid, !presentationTime.isIndefinite else { return }
+
+        // Legible output is monotonic during normal playback. A backwards
+        // timestamp means AVPlayer crossed a seek/discontinuity, so captions
+        // from the old playback position must not leak into the new one.
+        if let last = events.last,
+           CMTimeCompare(presentationTime, last.presentationTime) < 0
+        {
+            events.removeAll(keepingCapacity: true)
+        }
+
+        if let index = events.lastIndex(where: {
+            CMTimeCompare($0.presentationTime, presentationTime) == 0
+        }) {
+            events[index] = Event(presentationTime: presentationTime, text: text)
+        } else {
+            events.append(Event(presentationTime: presentationTime, text: text))
+        }
+
+        // This is only a synchronization window, not a subtitle archive.
+        if events.count > 256 {
+            events.removeFirst(events.count - 256)
+        }
+    }
+
+    func text(at presentationTime: CMTime) -> String? {
+        guard presentationTime.isValid, !presentationTime.isIndefinite else { return nil }
+        return events.last(where: {
+            CMTimeCompare($0.presentationTime, presentationTime) <= 0
+        })?.text
+    }
+
+    mutating func removeAll() {
+        events.removeAll(keepingCapacity: true)
+    }
+}
+
 @MainActor
 final class VideoEnhancementController: NSObject, ObservableObject {
     @Published
@@ -118,7 +164,9 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     private var renderTickCount = 0
     private var renderTickWindowStart = CACurrentMediaTime()
     private var sessionGeneration: Int64 = 0
+    private var latestPublishedPresentationTime: CMTime?
     private var subtitleSelectionTask: Task<Void, Never>?
+    private var subtitleTimeline = EnhancedSubtitleTimeline()
     private var targetSize: CGSize = .zero
     private var thermalRecoveryWorkItem: DispatchWorkItem?
     private var retainsCriticalThermalBypass = false
@@ -190,7 +238,9 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         )
         frameSamples.removeAll(keepingCapacity: true)
         latestPixelBuffer = nil
+        latestPublishedPresentationTime = nil
         subtitleText = nil
+        subtitleTimeline.removeAll()
         outputSize = .zero
         enhancedDroppedFrames = 0
         recentEnhancedDroppedFrames = 0
@@ -216,7 +266,9 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         }
         currentItem = nil
         latestPixelBuffer = nil
+        latestPublishedPresentationTime = nil
         subtitleText = nil
+        subtitleTimeline.removeAll()
         isProcessingFrame = false
         pendingFrames.removeAll()
         isPixelFormatSupported = true
@@ -277,9 +329,16 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         guard !isUsingNativePlaybackLayer else { return }
 
         let itemTime = videoOutput.itemTime(forHostTime: hostTime)
+        var presentationTime = CMTime.invalid
         guard videoOutput.hasNewPixelBuffer(forItemTime: itemTime),
-              let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: itemTime, itemTimeForDisplay: nil)
+              let pixelBuffer = videoOutput.copyPixelBuffer(
+                  forItemTime: itemTime,
+                  itemTimeForDisplay: &presentationTime
+              )
         else { return }
+        if !presentationTime.isValid || presentationTime.isIndefinite {
+            presentationTime = itemTime
+        }
 
         let pixelSize = CGSize(
             width: CVPixelBufferGetWidth(pixelBuffer),
@@ -310,7 +369,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         )
         let context = VideoFrameContext(
             pixelBuffer: pixelBuffer,
-            presentationTime: itemTime,
+            presentationTime: presentationTime,
             duration: CMTime(seconds: 1 / frameRate, preferredTimescale: 600),
             sourceFrameRate: frameRate,
             sourceSize: pixelSize,
@@ -334,7 +393,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         }
 
         if latestPixelBuffer == nil {
-            publish(pixelBuffer)
+            publish(pixelBuffer, presentationTime: presentationTime)
         }
         process(context, with: processor)
     }
@@ -363,10 +422,10 @@ final class VideoEnhancementController: NSObject, ObservableObject {
                 switch result {
                 case .passthrough:
                     self.pendingFrames.removeAll()
-                    self.publish(context.pixelBuffer)
+                    self.publish(context.pixelBuffer, presentationTime: context.presentationTime)
                     self.temporarilyBypassAfterProcessingFailure()
                 case let .replace(output):
-                    self.publish(output)
+                    self.publish(output, presentationTime: context.presentationTime)
                     self.outputSize = CGSize(
                         width: CVPixelBufferGetWidth(output),
                         height: CVPixelBufferGetHeight(output)
@@ -415,6 +474,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         let usesSystemSubtitleRendering = isPictureInPictureActive || player.isExternalPlaybackActive
         subtitleOutput.suppressesPlayerRendering = !usesSystemSubtitleRendering
         usesCustomSubtitleRendering = !usesSystemSubtitleRendering
+        synchronizeSubtitleText()
     }
 
     private func selectSubtitle(
@@ -538,9 +598,32 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         return min(requestedMode.fixedLevel ?? .quality, deviceMaximum)
     }
 
-    private func publish(_ pixelBuffer: CVPixelBuffer) {
+    private func publish(_ pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
         latestPixelBuffer = pixelBuffer
+        latestPublishedPresentationTime = presentationTime
+        synchronizeSubtitleText()
         frameRevision &+= 1
+    }
+
+    private func recordSubtitle(text: String?, at presentationTime: CMTime) {
+        subtitleTimeline.record(text: text, at: presentationTime)
+        synchronizeSubtitleText()
+    }
+
+    private func synchronizeSubtitleText() {
+        guard usesCustomSubtitleRendering else {
+            subtitleText = nil
+            return
+        }
+
+        // The enhanced image becomes visible only after GPU processing. Keying
+        // captions to that frame's PTS keeps them with the image instead of the
+        // AVPlayer audio clock. Native fallback has no processing delay.
+        let presentationTime = isUsingNativePlaybackLayer
+            ? player.currentTime()
+            : latestPublishedPresentationTime
+        guard let presentationTime else { return }
+        subtitleText = subtitleTimeline.text(at: presentationTime)
     }
 
     private func resetPerformanceWindow(
@@ -685,7 +768,10 @@ extension VideoEnhancementController: AVPlayerItemLegibleOutputPushDelegate {
             guard let self,
                   output === self.subtitleOutput
             else { return }
-            self.subtitleText = text.isEmpty ? nil : text
+            self.recordSubtitle(
+                text: text.isEmpty ? nil : text,
+                at: itemTime
+            )
         }
     }
 }

@@ -13,6 +13,28 @@ import Metal
 import XCTest
 
 final class VideoEnhancementTests: XCTestCase {
+    func testSubtitleTimelineFollowsPresentedFrameTime() {
+        var timeline = EnhancedSubtitleTimeline()
+        timeline.record(text: "first", at: CMTime(seconds: 1, preferredTimescale: 600))
+        timeline.record(text: nil, at: CMTime(seconds: 2, preferredTimescale: 600))
+        timeline.record(text: "second", at: CMTime(seconds: 3, preferredTimescale: 600))
+
+        XCTAssertNil(timeline.text(at: CMTime(seconds: 0.9, preferredTimescale: 600)))
+        XCTAssertEqual(timeline.text(at: CMTime(seconds: 1.5, preferredTimescale: 600)), "first")
+        XCTAssertNil(timeline.text(at: CMTime(seconds: 2.5, preferredTimescale: 600)))
+        XCTAssertEqual(timeline.text(at: CMTime(seconds: 3, preferredTimescale: 600)), "second")
+    }
+
+    func testSubtitleTimelineClearsOldPositionAfterBackwardSeek() {
+        var timeline = EnhancedSubtitleTimeline()
+        timeline.record(text: "old position", at: CMTime(seconds: 90, preferredTimescale: 600))
+        timeline.record(text: "after seek", at: CMTime(seconds: 10, preferredTimescale: 600))
+
+        XCTAssertEqual(timeline.events.count, 1)
+        XCTAssertEqual(timeline.text(at: CMTime(seconds: 10, preferredTimescale: 600)), "after seek")
+        XCTAssertNil(timeline.text(at: CMTime(seconds: 9, preferredTimescale: 600)))
+    }
+
     @MainActor
     func testSleepTimerCountdownExtensionAndExpiration() {
         var currentDate = Date(timeIntervalSince1970: 1000)
