@@ -22,6 +22,17 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "2026.8.24",
+          "buildVersion": "1787552163",
+          "marketingVersion": "Enhanced 2026.8.24 (1787552163)",
+          "date": "2026-08-24T06:16:03Z",
+          "localizedDescription": "Automated build from 963e14d with thermally adaptive Apple MetalFX enhancement, orientation- and color-safe A/B comparison and zoom-to-fill cropping, realtime edge-quality profiles, duplicate-render and offscreen-fill suppression, source-FPS frame pacing, bounded processing buffering, PiP resource suspension, reliable subtitles and a stable scrollable subtitle settings sheet, customizable text-subtitle positioning, playback sleep timer, and current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.24-1787552163/Swiftfin-Enhanced.ipa",
+          "size": 182793253,
+          "sha256": "2899ef4e0244d3c735c6219c76260ab1c4740d4e49ce48ba694ee7383ceaf1db",
+          "minOSVersion": "18.6"
+        },
+        {
           "version": "2026.8.23",
           "buildVersion": "1787520069",
           "marketingVersion": "Enhanced 2026.8.23 (1787520069)",
