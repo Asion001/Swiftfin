@@ -15,7 +15,7 @@ AltStore PAL cannot use this source because PAL requires Apple-notarized alterna
 ## Automation
 
 - `Sync Jellyfin Upstream` checks `jellyfin/Swiftfin` every day and on manual dispatch. It merges and pushes only when Git reports no conflicts. A conflict leaves `main` unchanged, fails the workflow, and creates or updates an issue when repository issues are enabled.
-- `Enhanced Player CI` tests pull requests, the system MetalFX integration, the AltStore source generator, and Swiftfin's enhancement tests.
+- `Enhanced Player CI` tests pull requests, the MetalFX and pinned Anime4K integrations, the AltStore source generator, and Swiftfin's enhancement tests.
 - `Publish AltStore Release` runs for every non-source-only push to `main`. It repeats the release-blocking tests, creates an unsigned device IPA with the separate `dev.asion.swiftfin.enhanced` bundle identifier, builds and checksum-signs the Apple silicon Mac Catalyst app, publishes both in one GitHub release, and prepends the verified iOS metadata to `altstore-source.json`.
 
 The source updater reads version and privacy information from the built app, calculates the IPA size and SHA-256 checksum, retains the newest 20 releases, and refuses bundle-identifier or metadata mismatches.

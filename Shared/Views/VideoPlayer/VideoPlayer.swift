@@ -151,6 +151,30 @@ struct VideoPlayer: View {
         .onChange(of: sleepTimerController.expirationCount) {
             toaster.present(SleepTimerStrings.paused, systemName: "moon.zzz.fill")
         }
+        .sheet(item: $containerState.presentedModal) { modal in
+            Group {
+                switch modal {
+                case .subtitles:
+                    EnhancedSubtitleSettingsView()
+                case .enhancement:
+                    if let controller = (manager.proxy as? AVMediaPlayerProxy)?.enhancementController {
+                        EnhancedEnhancementSettingsView(controller: controller)
+                    } else {
+                        ContentUnavailableView(
+                            VideoEnhancementStrings.title,
+                            systemImage: "sparkles.tv"
+                        )
+                    }
+                }
+            }
+            .environmentObject(manager)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationContentInteraction(.scrolls)
+            .onDisappear {
+                containerState.presentedModal = nil
+            }
+        }
         #endif
     }
 }

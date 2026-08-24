@@ -1,8 +1,8 @@
 # Player Differences
 
 Swiftfin offers three player options on iOS and iPadOS: **Swiftfin** (VLCKit),
-**Native** (AVPlayer), and **Enhanced** (AVPlayer with real-time Apple MetalFX
-processing). Swiftfin remains the default and is recommended for optimal
+**Native** (AVPlayer), and **Enhanced** (AVPlayer with selectable real-time
+Apple MetalFX or Anime4K processing). Swiftfin remains the default and is recommended for optimal
 compatibility. Enhanced uses the Native device profile, so Jellyfin can remux
 or transcode unsupported containers, audio, and subtitles before playback.
 
@@ -21,8 +21,11 @@ latency. Source-FPS matching can be toggled in settings or during playback;
 turning it off presents the latest processed frame at the display's maximum
 refresh rate.
 
-Fast, Balanced, and Quality use Apple MetalFX spatial scaling with progressively
-stronger, lightweight luminance edge enhancement. MetalFX objects and private
+MetalFX is the recommended default. Fast, Balanced, and Quality use Apple
+MetalFX spatial scaling with progressively stronger, lightweight luminance
+edge enhancement. Anime4K is also available as an experimental iPhone/iPad
+provider using Mode C Fast, Mode A Fast, and Mode A+A Fast respectively; it can
+run hotter and drop more frames during sustained playback. MetalFX objects and private
 textures are reused across frames, output buffers come from a bounded pool, and
 unchanged frames are not re-rendered. In aspect-fill mode, the centered source
 region that will remain visible is cropped before scaling, so MetalFX does not
@@ -57,7 +60,7 @@ playback restores the previous screen-awake behavior.
 | **External Audio Tracks**  | ❌                | ❌                | ❌                     |
 | **Framerate Matching**     | ❌                | ✅                | ✅                     |
 | **HDR to SDR Tonemapping** | ✅ [1]            | 🔶 [2]            | Original AVPlayer picture |
-| **MetalFX Upscaling**      | ❌                | ❌                | ✅ SDR ≤1080p           |
+| **MetalFX / Anime4K Upscaling** | ❌           | ❌                | ✅ SDR ≤1080p           |
 | **Sleep Timer**            | ✅ iOS/iPadOS      | ✅ iOS/iPadOS      | ✅ iOS/iPadOS           |
 | **Player Controls**        | Speed, aspect fill, chapters, subtitles, trickplay, audio tracks, customizable UI | Speed, aspect fill | Existing Swiftfin controls plus enhancement modes, A/B comparison, performance monitor, and text-subtitle positioning |
 | **Picture-in-Picture**     | ❌                | ✅                | Original AVPlayer picture |

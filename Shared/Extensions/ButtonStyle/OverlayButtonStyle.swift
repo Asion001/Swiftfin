@@ -18,7 +18,7 @@ extension VideoPlayer.PlaybackControls {
         func body(content: Content) -> some View {
             if #available(iOS 26.0, *), UIDevice.supportsLiquidGlass {
                 content
-                    .buttonStyle(OverlayGlassButtonStyle(onPressed: onPressed))
+                    .buttonStyle(OverlayGlassButtonStyle())
                     .buttonBorderShape(.circle)
             } else {
                 content
@@ -29,9 +29,6 @@ extension VideoPlayer.PlaybackControls {
 
     @available(iOS 26.0, tvOS 26.0, *)
     struct OverlayGlassButtonStyle: PrimitiveButtonStyle {
-
-        let onPressed: (Bool) -> Void
-
         func makeBody(configuration: Configuration) -> some View {
             Button(role: configuration.role) {
                 configuration.trigger()
@@ -39,9 +36,10 @@ extension VideoPlayer.PlaybackControls {
                 configuration.label
             }
             .buttonStyle(.glass)
-            .onLongPressGesture(minimumDuration: .infinity) {} onPressingChanged: { isPressed in
-                onPressed(isPressed)
-            }
+            // An infinite SwiftUI long-press gesture consumes Apple Pencil
+            // taps on iPadOS 26 and can leave the whole toolbar waiting for a
+            // recognizer to fail. A normal glass button already provides its
+            // own pressed feedback, so do not layer another recognizer on it.
         }
     }
 

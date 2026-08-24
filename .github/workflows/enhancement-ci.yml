@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   test:
-    name: MetalFX integration tests
+    name: Enhancement integration tests
     runs-on: macos-26
 
     steps:
@@ -37,6 +37,12 @@ jobs:
 
       - name: Build Carthage dependencies
         run: carthage update --use-xcframeworks --cache-builds
+
+      - name: Verify and test pinned Anime4KMetal
+        run: |
+          git clone --branch v0.1.2 --depth 1 https://github.com/cinemore/anime4k-metal.git "$RUNNER_TEMP/anime4k-metal"
+          test "$(git -C "$RUNNER_TEMP/anime4k-metal" rev-parse HEAD)" = "60915937f6f391b30d50102533ce6fd98d009174"
+          swift test --package-path "$RUNNER_TEMP/anime4k-metal"
 
       - name: Test AltStore source generator
         run: python3 -m unittest Scripts/test_update_altstore_source.py

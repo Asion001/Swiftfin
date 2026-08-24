@@ -2,6 +2,15 @@
   "originHash" : "3e15a4e971fcad437b8d0e6ebc974de04b89134ad85622cf12419a0abeb55a24",
   "pins" : [
     {
+      "identity" : "anime4k-metal",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/cinemore/anime4k-metal.git",
+      "state" : {
+        "revision" : "60915937f6f391b30d50102533ce6fd98d009174",
+        "version" : "0.1.2"
+      }
+    },
+    {
       "identity" : "blurhashkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/LePips/BlurHashKit",

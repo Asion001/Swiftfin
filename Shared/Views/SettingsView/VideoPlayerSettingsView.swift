@@ -22,6 +22,8 @@ struct VideoPlayerSettingsView: View {
     #if os(iOS)
     @Default(.VideoPlayer.videoPlayerType)
     private var videoPlayerType
+    @Default(.VideoPlayer.enhancementProvider)
+    private var enhancementProvider
     @Default(.VideoPlayer.enhancementMode)
     private var enhancementMode
     @Default(.VideoPlayer.enhancementMatchesSourceFrameRate)
@@ -127,10 +129,28 @@ struct VideoPlayerSettingsView: View {
     }
 
     #if os(iOS)
+    private var enhancementFooter: String {
+        [
+            VideoEnhancementStrings.energyWarning,
+            enhancementProvider == .anime4K ? VideoEnhancementStrings.anime4KWarning : nil,
+            VideoEnhancementStrings.frameRateExplanation,
+        ]
+            .compactMap(\.self)
+            .joined(separator: "\n\n")
+    }
+
     @ViewBuilder
     private var enhancementSettings: some View {
         Section {
             Picker(L10n.videoPlayerType, selection: $videoPlayerType)
+
+            Picker(VideoEnhancementStrings.upscaler, selection: $enhancementProvider) {
+                ForEach(VideoEnhancementProvider.supportedCases, id: \.rawValue) { provider in
+                    Text(provider.displayTitle)
+                        .tag(provider)
+                }
+            }
+            .disabled(videoPlayerType != .enhanced)
 
             Picker(VideoEnhancementStrings.title, selection: $enhancementMode)
                 .disabled(videoPlayerType != .enhanced)
@@ -146,7 +166,7 @@ struct VideoPlayerSettingsView: View {
         } header: {
             Text(VideoEnhancementStrings.title)
         } footer: {
-            Text("\(VideoEnhancementStrings.energyWarning)\n\n\(VideoEnhancementStrings.frameRateExplanation)")
+            Text(enhancementFooter)
         }
     }
     #endif

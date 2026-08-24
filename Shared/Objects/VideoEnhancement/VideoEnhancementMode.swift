@@ -10,6 +10,28 @@ import Foundation
 
 // swiftlint:disable hard_coded_display_string
 
+enum VideoEnhancementProvider: String, CaseIterable, Displayable, Storable {
+    case metalFX
+    case anime4K
+
+    static var supportedCases: [Self] {
+        #if targetEnvironment(macCatalyst) || targetEnvironment(simulator)
+        [.metalFX]
+        #else
+        allCases
+        #endif
+    }
+
+    var displayTitle: String {
+        switch self {
+        case .metalFX:
+            "MetalFX"
+        case .anime4K:
+            "Anime4K (Experimental)"
+        }
+    }
+}
+
 enum VideoEnhancementMode: String, CaseIterable, Displayable, Storable {
     case off
     case auto
@@ -122,6 +144,11 @@ enum VideoEnhancementBypassReason: Equatable, Sendable {
 enum VideoEnhancementStrings {
     static let title = String(localized: "enhancement.title", defaultValue: "Anime enhancement")
     static let comparison = String(localized: "enhancement.comparison", defaultValue: "A/B comparison")
+    static let upscaler = String(localized: "enhancement.upscaler", defaultValue: "Upscaler")
+    static let anime4KWarning = String(
+        localized: "enhancement.anime4k-warning",
+        defaultValue: "Anime4K uses a legacy multi-pass shader and can run hotter or drop frames. MetalFX is recommended for sustained playback."
+    )
     static let matchSourceFrameRate = String(
         localized: "enhancement.match-source-frame-rate",
         defaultValue: "Match source FPS"

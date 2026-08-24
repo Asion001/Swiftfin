@@ -299,6 +299,10 @@ extension Defaults.Keys {
         }
 
         #if os(iOS)
+        static var enhancementProvider: Key<VideoEnhancementProvider> {
+            UserKey("videoEnhancementProvider", default: .metalFX)
+        }
+
         static var enhancementMode: Key<VideoEnhancementMode> {
             UserKey("videoEnhancementMode", default: .auto)
         }

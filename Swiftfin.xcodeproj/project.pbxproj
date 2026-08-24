@@ -42,6 +42,7 @@
 		62666E3227E5021E00EC0ECD /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 62666E3127E5021E00EC0ECD /* UIKit.framework */; };
 		62666E3E27E503FA00EC0ECD /* MediaAccessibility.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5362E4BE267D40E4000E2F71 /* MediaAccessibility.framework */; };
 		62666E3F27E5040300EC0ECD /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5362E4C6267D40F4000E2F71 /* SystemConfiguration.framework */; };
+		A4E4C0DE0000000000000001 /* Anime4KMetal in Frameworks */ = {isa = PBXBuildFile; productRef = A4E4C0DE0000000000000003 /* Anime4KMetal */; };
 		BD88CB422D77E6A0006BB5E3 /* TVOSPicker in Frameworks */ = {isa = PBXBuildFile; productRef = BD88CB412D77E6A0006BB5E3 /* TVOSPicker */; };
 		E1002B682793CFBA00E47059 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = E1002B672793CFBA00E47059 /* Algorithms */; };
 		E1002B6B2793E36600E47059 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = E1002B6A2793E36600E47059 /* Algorithms */; };
@@ -337,6 +338,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4E4C0DE0000000000000001 /* Anime4KMetal in Frameworks */,
 				E12B93072947CD0F00CE0BD9 /* Pulse in Frameworks */,
 				E12CDBBF2FFB592A00828742 /* CollectionVGrid in Frameworks */,
 				62666E3E27E503FA00EC0ECD /* MediaAccessibility.framework in Frameworks */,
@@ -586,6 +588,7 @@
 			);
 			name = "Swiftfin iOS";
 			packageProductDependencies = (
+				A4E4C0DE0000000000000003 /* Anime4KMetal */,
 				E13DD3C52716499E009D4DAF /* CoreStore */,
 				E13DD3D227168E65009D4DAF /* Defaults */,
 				E1002B672793CFBA00E47059 /* Algorithms */,
@@ -751,6 +754,7 @@
 			);
 			mainGroup = 5377CBE8263B596A003A4E83;
 			packageReferences = (
+				A4E4C0DE0000000000000002 /* XCRemoteSwiftPackageReference "anime4k-metal" */,
 				5335256F265EA0A0006CCA86 /* XCRemoteSwiftPackageReference "SwiftUI-Introspect" */,
 				E13DD3C42716499E009D4DAF /* XCRemoteSwiftPackageReference "CoreStore" */,
 				E13DD3D127168E65009D4DAF /* XCRemoteSwiftPackageReference "Defaults" */,
@@ -1345,6 +1349,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		A4E4C0DE0000000000000002 /* XCRemoteSwiftPackageReference "anime4k-metal" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/cinemore/anime4k-metal.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.1.2;
+			};
+		};
 		5335256F265EA0A0006CCA86 /* XCRemoteSwiftPackageReference "SwiftUI-Introspect" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/siteline/SwiftUI-Introspect";
@@ -1540,6 +1552,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		A4E4C0DE0000000000000003 /* Anime4KMetal */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A4E4C0DE0000000000000002 /* XCRemoteSwiftPackageReference "anime4k-metal" */;
+			productName = Anime4KMetal;
+		};
 		BD88CB412D77E6A0006BB5E3 /* TVOSPicker */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BD88CB402D77E6A0006BB5E3 /* XCRemoteSwiftPackageReference "TVOSPicker" */;

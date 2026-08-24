@@ -12,20 +12,42 @@ import SwiftUI
 extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
     struct Enhancement: View {
         @EnvironmentObject
-        private var manager: MediaPlayerManager
+        private var containerState: VideoPlayerContainerState
 
         var body: some View {
-            if let controller = (manager.proxy as? AVMediaPlayerProxy)?.enhancementController {
-                Content(controller: controller)
+            Button {
+                containerState.presentedModal = .enhancement
+            } label: {
+                Label(
+                    VideoEnhancementStrings.title,
+                    systemImage: VideoPlayerActionButton.enhancement.systemImage
+                )
             }
         }
+    }
+}
 
-        private struct Content: View {
-            @ObservedObject
-            var controller: VideoEnhancementController
+struct EnhancedEnhancementSettingsView: View {
+    @Environment(\.dismiss)
+    private var dismiss
 
-            var body: some View {
-                Menu {
+    @ObservedObject
+    var controller: VideoEnhancementController
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker(
+                        VideoEnhancementStrings.upscaler,
+                        selection: $controller.requestedProvider
+                    ) {
+                        ForEach(VideoEnhancementProvider.supportedCases, id: \.rawValue) { provider in
+                            Text(provider.displayTitle)
+                                .tag(provider)
+                        }
+                    }
+
                     Picker(
                         VideoEnhancementStrings.title,
                         selection: $controller.requestedMode
@@ -35,9 +57,13 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                                 .tag(mode)
                         }
                     }
+                } footer: {
+                    if controller.requestedProvider == .anime4K {
+                        Text(VideoEnhancementStrings.anime4KWarning)
+                    }
+                }
 
-                    Divider()
-
+                Section {
                     Toggle(
                         VideoEnhancementStrings.comparison,
                         isOn: $controller.isComparisonEnabled
@@ -53,19 +79,22 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                         VideoEnhancementStrings.performance,
                         isOn: $controller.showsPerformanceHUD
                     )
+                }
 
-                    if let bypassReason = controller.bypassReason {
-                        Divider()
+                if let bypassReason = controller.bypassReason {
+                    Section {
                         Label(bypassReason.displayTitle, systemImage: "info.circle")
                     }
-                } label: {
-                    Label(
-                        VideoEnhancementStrings.title,
-                        systemImage: VideoPlayerActionButton.enhancement.systemImage
-                    )
                 }
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(.primary, .secondary)
+            }
+            .navigationTitle(VideoEnhancementStrings.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.done) {
+                        dismiss()
+                    }
+                }
             }
         }
     }

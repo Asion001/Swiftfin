@@ -55,6 +55,15 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     @Published
     var isComparisonEnabled = false
     @Published
+    var requestedProvider: VideoEnhancementProvider {
+        didSet {
+            guard requestedProvider != oldValue else { return }
+            Defaults[.VideoPlayer.enhancementProvider] = requestedProvider
+            replaceProcessor()
+        }
+    }
+
+    @Published
     var matchesSourceFrameRate: Bool {
         didSet { Defaults[.VideoPlayer.enhancementMatchesSourceFrameRate] = matchesSourceFrameRate }
     }
@@ -89,7 +98,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     private(set) var latestPixelBuffer: CVPixelBuffer?
 
     private let player: AVPlayer
-    private let processor: (any VideoFrameProcessor)?
+    private var processor: (any VideoFrameProcessor)?
     private let processingQueue = DispatchQueue(label: "org.jellyfin.swiftfin.video-enhancement", qos: .userInteractive)
     private let subtitleOutput = AVPlayerItemLegibleOutput()
     private let videoOutput: AVPlayerItemVideoOutput
@@ -116,7 +125,9 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     private var lastAccessLogUpdate = 0.0
 
     init(player: AVPlayer) {
+        let requestedProvider = Defaults[.VideoPlayer.enhancementProvider]
         self.player = player
+        self.requestedProvider = requestedProvider
         self.requestedMode = Defaults[.VideoPlayer.enhancementMode]
         self.matchesSourceFrameRate = Defaults[.VideoPlayer.enhancementMatchesSourceFrameRate]
         self.showsPerformanceHUD = Defaults[.VideoPlayer.enhancementPerformanceHUD]
@@ -131,15 +142,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         ]
         self.videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: attributes)
 
-        if MTLCreateSystemDefaultDevice() == nil {
-            self.processor = nil
-        } else {
-            do {
-                self.processor = try MetalFXFrameProcessor()
-            } catch {
-                self.processor = nil
-            }
-        }
+        self.processor = Self.makeProcessor(for: requestedProvider)
 
         super.init()
 
@@ -220,6 +223,49 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         processingFailureGeneration = nil
         processor?.invalidate(sessionGeneration: sessionGeneration)
         processor?.drain()
+    }
+
+    private func replaceProcessor() {
+        sessionGeneration += 1
+
+        let previousProcessor = processor
+        previousProcessor?.invalidate(sessionGeneration: sessionGeneration)
+        previousProcessor?.drain()
+
+        processor = Self.makeProcessor(for: requestedProvider)
+        processor?.invalidate(sessionGeneration: sessionGeneration)
+        isProcessingFrame = false
+        pendingFrames.removeAll()
+        latestPixelBuffer = nil
+        outputSize = .zero
+        processingFailureGeneration = nil
+        resetPerformanceWindow(
+            at: CACurrentMediaTime(),
+            startingAt: requestedMode.fixedLevel ?? .balanced
+        )
+        refreshActiveLevel()
+        refreshBypassReason()
+    }
+
+    private static func makeProcessor(
+        for provider: VideoEnhancementProvider
+    ) -> (any VideoFrameProcessor)? {
+        guard MTLCreateSystemDefaultDevice() != nil else { return nil }
+
+        do {
+            switch provider {
+            case .metalFX:
+                return try MetalFXFrameProcessor()
+            case .anime4K:
+                #if !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
+                return try Anime4KFrameProcessor()
+                #else
+                return nil
+                #endif
+            }
+        } catch {
+            return nil
+        }
     }
 
     func renderTick(hostTime: CFTimeInterval, targetSize: CGSize) {

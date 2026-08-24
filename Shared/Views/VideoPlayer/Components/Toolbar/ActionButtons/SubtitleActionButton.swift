@@ -26,9 +26,6 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         private var selectedSubtitleStreamIndex: Int?
 
         #if os(iOS)
-        @State
-        private var isPresentingSubtitleDialog = false
-
         private var isEnhancedPlayer: Bool {
             (manager.proxy as? AVMediaPlayerProxy)?.presentation == .enhanced
         }
@@ -73,24 +70,9 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         #if os(iOS)
         private var enhancedSubtitleButton: some View {
             Button {
-                isPresentingSubtitleDialog = true
+                containerState.presentedModal = .subtitles
             } label: {
                 label
-            }
-            .sheet(isPresented: $isPresentingSubtitleDialog) {
-                EnhancedSubtitleSettingsView(
-                    selectedSubtitleStreamIndex: $selectedSubtitleStreamIndex,
-                    isPresented: $isPresentingSubtitleDialog
-                )
-                .environmentObject(manager)
-                .onAppear {
-                    containerState.isPresentingModal = true
-                }
-                .onDisappear {
-                    containerState.isPresentingModal = false
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
             }
         }
         #endif
@@ -121,18 +103,18 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
 }
 
 #if os(iOS)
-private struct EnhancedSubtitleSettingsView: View {
+struct EnhancedSubtitleSettingsView: View {
+    @Environment(\.dismiss)
+    private var dismiss
+
     @EnvironmentObject
     private var manager: MediaPlayerManager
 
     @Default(.VideoPlayer.Subtitle.configuration)
     private var subtitleConfiguration
 
-    @Binding
-    var selectedSubtitleStreamIndex: Int?
-
-    @Binding
-    var isPresented: Bool
+    @State
+    private var selectedSubtitleStreamIndex: Int?
 
     var body: some View {
         NavigationStack {
@@ -198,10 +180,16 @@ private struct EnhancedSubtitleSettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L10n.done) {
-                        isPresented = false
+                        dismiss()
                     }
                 }
             }
+        }
+        .onAppear {
+            selectedSubtitleStreamIndex = manager.playbackItem?.selectedSubtitleStreamIndex
+        }
+        .onChange(of: selectedSubtitleStreamIndex) {
+            manager.playbackItem?.selectedSubtitleStreamIndex = selectedSubtitleStreamIndex
         }
     }
 }

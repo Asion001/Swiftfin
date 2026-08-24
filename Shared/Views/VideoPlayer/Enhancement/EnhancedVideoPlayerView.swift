@@ -30,12 +30,48 @@ struct EnhancedVideoPlayerView: View {
             EnhancedSubtitleOverlay(controller: controller)
                 .allowsHitTesting(false)
 
+            if controller.isComparisonEnabled,
+               !controller.isUsingNativePlaybackLayer
+            {
+                EnhancedComparisonDivider(controller: controller)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+
             if controller.showsPerformanceHUD {
                 VideoEnhancementPerformanceHUD(controller: controller)
                     .padding(16)
                     .allowsHitTesting(false)
             }
         }
+    }
+}
+
+private struct EnhancedComparisonDivider: View {
+    @ObservedObject
+    var controller: VideoEnhancementController
+
+    var body: some View {
+        GeometryReader { proxy in
+            let sourceSize = VideoEnhancementGeometry.orientedSize(
+                controller.sourceSize,
+                rotationDegrees: controller.sourceRotationDegrees
+            )
+            let videoRect = VideoEnhancementGeometry.aspectRect(
+                sourceSize: sourceSize,
+                targetSize: proxy.size,
+                fill: controller.isAspectFilled
+            ).intersection(CGRect(origin: .zero, size: proxy.size))
+
+            if !videoRect.isNull, videoRect.width > 0, videoRect.height > 0 {
+                Rectangle()
+                    .fill(.red)
+                    .frame(width: 3, height: videoRect.height)
+                    .position(x: videoRect.midX, y: videoRect.midY)
+                    .shadow(color: .black.opacity(0.65), radius: 1)
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -311,7 +347,7 @@ private struct VideoEnhancementPerformanceHUD: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(
-                "\(MetalFXFrameProcessor.engineDisplayName) \(controller.requestedMode.displayTitle) → \(controller.activeLevel.displayTitle)"
+                "\(controller.requestedProvider.displayTitle) \(controller.requestedMode.displayTitle) → \(controller.activeLevel.displayTitle)"
             )
             Text("\(sourceResolution) → \(outputResolution)")
             Text(String(

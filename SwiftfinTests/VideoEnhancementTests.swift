@@ -155,6 +155,36 @@ final class VideoEnhancementTests: XCTestCase {
         }
     }
 
+    func testProviderSelectionAndPersistence() {
+        XCTAssertEqual(VideoEnhancementProvider.metalFX.displayTitle, "MetalFX")
+        XCTAssertTrue(VideoEnhancementProvider.anime4K.displayTitle.contains("Anime4K"))
+
+        #if targetEnvironment(simulator) || targetEnvironment(macCatalyst)
+        XCTAssertEqual(VideoEnhancementProvider.supportedCases, [.metalFX])
+        #else
+        XCTAssertEqual(VideoEnhancementProvider.supportedCases, [.metalFX, .anime4K])
+        #endif
+
+        let key = "videoEnhancementProvider"
+        let defaults = UserDefaults.currentUserSuite
+        let original = defaults.object(forKey: key)
+        defer {
+            if let original {
+                defaults.set(original, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        for provider in VideoEnhancementProvider.allCases {
+            defaults.set(provider.rawValue, forKey: key)
+            XCTAssertEqual(
+                VideoEnhancementProvider(rawValue: defaults.string(forKey: key) ?? ""),
+                provider
+            )
+        }
+    }
+
     func testEligibilityReasonsAndPrecedence() {
         var inputs = eligibleInputs()
         XCTAssertNil(VideoEnhancementEligibility.bypassReason(for: inputs))

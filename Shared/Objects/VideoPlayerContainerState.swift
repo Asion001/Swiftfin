@@ -19,6 +19,15 @@ import SwiftUI
 @MainActor
 class VideoPlayerContainerState: ObservableObject {
 
+    enum PresentedModal: String, Identifiable {
+        case enhancement
+        case subtitles
+
+        var id: String {
+            rawValue
+        }
+    }
+
     @Published
     var isAspectFilled: Bool = false
 
@@ -123,18 +132,23 @@ class VideoPlayerContainerState: ObservableObject {
     @Published
     var isProgressBarFocused: Bool = false
 
-    /// Keeps transient player UI stable while a sheet or other modal control is open.
-    /// The normal overlay dismissal timer must not hide the toolbar underneath it.
+    /// A stable, player-level presentation anchor for controls launched from a
+    /// transient toolbar menu. Keeping the sheet here prevents SwiftUI from
+    /// destroying its presenter as the parent menu closes.
     @Published
-    var isPresentingModal: Bool = false {
+    var presentedModal: PresentedModal? = nil {
         didSet {
-            if isPresentingModal {
+            if presentedModal != nil {
                 isPresentingOverlay = true
                 timer.stop()
             } else if isPresentingOverlay {
                 timer.poke()
             }
         }
+    }
+
+    var isPresentingModal: Bool {
+        presentedModal != nil
     }
 
     var originalPlaybackRate: Float?
