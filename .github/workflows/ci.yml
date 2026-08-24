@@ -68,11 +68,4 @@ jobs:
           max_attempts: 3
           retry_on: error
           timeout_minutes: 60
-          command: xcodebuild -quiet \
-            -skipMacroValidation \
-            -skipPackagePluginValidation \
-            -project Swiftfin.xcodeproj \
-            -scheme "${{ matrix.scheme }}" \
-            -destination "${{ matrix.destination }}" \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+          command: xcodebuild -quiet -skipMacroValidation -skipPackagePluginValidation -project Swiftfin.xcodeproj -scheme "${{ matrix.scheme }}" -destination "${{ matrix.destination }}" CODE_SIGNING_ALLOWED=NO build
