@@ -38,13 +38,20 @@ jobs:
 
       - name: Cache Carthage
         uses: actions/cache@v4
+        id: carthage-cache
         with:
           path: Carthage
-          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile') }}
+          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
           restore-keys: ${{ runner.os }}-carthage-
 
       - name: Build Carthage dependencies
-        run: carthage update --use-xcframeworks --cache-builds
+        if: steps.carthage-cache.outputs.cache-hit != 'true'
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 4
+          retry_wait_seconds: 10
+          timeout_minutes: 20
+          command: carthage update --use-xcframeworks --cache-builds
 
       - name: Verify and test pinned Anime4KMetal
         run: |

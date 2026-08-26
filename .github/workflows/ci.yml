@@ -51,7 +51,13 @@ jobs:
           restore-keys: ${{ runner.os }}-carthage-
 
       - name: Update Carthage
-        run: carthage update --use-xcframeworks --cache-builds
+        if: steps.carthage-cache.outputs.cache-hit != 'true'
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 4
+          retry_wait_seconds: 10
+          timeout_minutes: 20
+          command: carthage update --use-xcframeworks --cache-builds
 
       # FIXME: caches would keep failed compiles?
 
