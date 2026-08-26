@@ -10,6 +10,7 @@
 import AVFoundation
 import Combine
 import CoreVideo
+import Darwin
 import Defaults
 import Foundation
 import Metal
@@ -62,6 +63,49 @@ struct EnhancedSubtitleTimeline {
     }
 }
 
+struct VideoEnhancementProcessCPUMonitor {
+    private var previousCPUTime: TimeInterval?
+    private var previousWallTime: TimeInterval?
+
+    mutating func sample(at wallTime: TimeInterval) -> Double? {
+        let cpuTime = Self.currentProcessCPUTime()
+        defer {
+            previousCPUTime = cpuTime
+            previousWallTime = wallTime
+        }
+
+        guard let previousCPUTime, let previousWallTime else { return nil }
+        return Self.utilization(
+            previousCPUTime: previousCPUTime,
+            currentCPUTime: cpuTime,
+            elapsedWallTime: wallTime - previousWallTime
+        )
+    }
+
+    mutating func reset() {
+        previousCPUTime = nil
+        previousWallTime = nil
+    }
+
+    static func utilization(
+        previousCPUTime: TimeInterval,
+        currentCPUTime: TimeInterval,
+        elapsedWallTime: TimeInterval
+    ) -> Double {
+        guard elapsedWallTime > 0, currentCPUTime >= previousCPUTime else { return 0 }
+        return (currentCPUTime - previousCPUTime) / elapsedWallTime * 100
+    }
+
+    private static func currentProcessCPUTime() -> TimeInterval {
+        var usage = rusage()
+        guard getrusage(RUSAGE_SELF, &usage) == 0 else { return 0 }
+
+        let user = TimeInterval(usage.ru_utime.tv_sec) + TimeInterval(usage.ru_utime.tv_usec) / 1_000_000
+        let system = TimeInterval(usage.ru_stime.tv_sec) + TimeInterval(usage.ru_stime.tv_usec) / 1_000_000
+        return user + system
+    }
+}
+
 @MainActor
 final class VideoEnhancementController: NSObject, ObservableObject {
     @Published
@@ -87,6 +131,8 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     private(set) var outputSize: CGSize = .zero
     @Published
     private(set) var percentile95ProcessingTime: TimeInterval = 0
+    @Published
+    private(set) var processCPUUsagePercent: Double = 0
     @Published
     private(set) var sourceFrameRate: Double = 24
     @Published
@@ -151,6 +197,7 @@ final class VideoEnhancementController: NSObject, ObservableObject {
 
     private var adaptivePolicy = EnhancementAdaptivePolicy()
     private var currentItem: AVPlayerItem?
+    private var cpuMonitor = VideoEnhancementProcessCPUMonitor()
     private var frameSamples: [EnhancementPerformanceSample] = []
     private var isLowMemory = false
     private var isHDR = false
@@ -247,6 +294,8 @@ final class VideoEnhancementController: NSObject, ObservableObject {
         recentEnhancedDropRate = 0
         averageProcessingTime = 0
         percentile95ProcessingTime = 0
+        processCPUUsagePercent = 0
+        cpuMonitor.reset()
         isProcessingFrame = false
         pendingFrames.removeAll()
         isComparisonEnabled = false
@@ -650,6 +699,9 @@ final class VideoEnhancementController: NSObject, ObservableObject {
     private func updateAccessLogIfNeeded(at timestamp: TimeInterval) {
         guard timestamp - lastAccessLogUpdate >= 1 else { return }
         lastAccessLogUpdate = timestamp
+        if let cpuUsage = cpuMonitor.sample(at: timestamp) {
+            processCPUUsagePercent = cpuUsage
+        }
         avPlayerDroppedFrames = currentItem?.accessLog()?.events.reduce(0) {
             $0 + $1.numberOfDroppedVideoFrames
         } ?? 0

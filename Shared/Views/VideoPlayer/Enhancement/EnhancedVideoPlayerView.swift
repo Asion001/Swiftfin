@@ -362,6 +362,11 @@ private struct VideoEnhancementPerformanceHUD: View {
                 controller.percentile95ProcessingTime * 1000
             ))
             Text(String(
+                format: "frame budget %.0f%% · app CPU %.0f%% · watts unavailable",
+                controller.averageProcessingTime * max(1, controller.sourceFrameRate) * 100,
+                controller.processCPUUsagePercent
+            ))
+            Text(String(
                 format: "drops %.1f%% / 3s (%d) · %d total · %d player",
                 controller.recentEnhancedDropRate * 100,
                 controller.recentEnhancedDroppedFrames,

@@ -130,6 +130,14 @@ struct VideoPlayer: View {
             // TODO: move to container view
             containerState.scrubbedSeconds.value = newItem?.baseItem.startSeconds ?? .zero
         }
+        .onReceive(manager.secondsBox.$value) { newSeconds in
+            // VLC writes this value directly from its playback callback. The
+            // AVPlayer-backed Enhanced presentation has no AVPlayerView in the
+            // SwiftUI hierarchy, so keep the shared progress clock synchronized
+            // at the player level for both native and enhanced passthrough.
+            guard !containerState.isScrubbing else { return }
+            containerState.scrubbedSeconds.value = newSeconds
+        }
         .onReceive(manager.$state) { newState in
             if newState == .stopped, !isBeingDismissedByTransition {
                 router.dismiss()

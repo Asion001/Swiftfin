@@ -350,11 +350,11 @@ extension Defaults.Keys {
             }
 
             static var verticalPanLeftAction: Key<PanGestureAction> {
-                UserKey("videoPlayerverticalPanLeftAction", default: .none)
+                UserKey("videoPlayerverticalPanLeftAction", default: .brightness)
             }
 
             static var verticalPanRightAction: Key<PanGestureAction> {
-                UserKey("videoPlayerverticalPanRightAction", default: .none)
+                UserKey("videoPlayerverticalPanRightAction", default: .volume)
             }
         }
 

@@ -13,6 +13,35 @@ import Metal
 import XCTest
 
 final class VideoEnhancementTests: XCTestCase {
+    func testProcessCPUUtilizationUsesCPUTimeDelta() {
+        XCTAssertEqual(
+            VideoEnhancementProcessCPUMonitor.utilization(
+                previousCPUTime: 10,
+                currentCPUTime: 10.5,
+                elapsedWallTime: 1
+            ),
+            50,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            VideoEnhancementProcessCPUMonitor.utilization(
+                previousCPUTime: 10,
+                currentCPUTime: 11.5,
+                elapsedWallTime: 1
+            ),
+            150,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            VideoEnhancementProcessCPUMonitor.utilization(
+                previousCPUTime: 10,
+                currentCPUTime: 11,
+                elapsedWallTime: 0
+            ),
+            0
+        )
+    }
+
     func testSubtitleTimelineFollowsPresentedFrameTime() {
         var timeline = EnhancedSubtitleTimeline()
         timeline.record(text: "first", at: CMTime(seconds: 1, preferredTimescale: 600))

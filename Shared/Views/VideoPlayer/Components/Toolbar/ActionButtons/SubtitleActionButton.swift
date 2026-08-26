@@ -128,6 +128,7 @@ struct EnhancedSubtitleSettingsView: View {
                             }
                         }
                         .pickerStyle(.inline)
+                        .labelsHidden()
                     }
                 }
 

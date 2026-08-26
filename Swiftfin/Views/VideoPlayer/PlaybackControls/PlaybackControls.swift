@@ -52,6 +52,7 @@ extension VideoPlayer {
                     Toolbar()
                         .frame(height: 50)
                         .isVisible(!isScrubbing && isPresentingOverlay)
+                        .allowsHitTesting(!isScrubbing && isPresentingOverlay)
                         .padding(.top, safeAreaInsets.top)
                         .padding(.leading, safeAreaInsets.leading)
                         .padding(.trailing, safeAreaInsets.trailing)
@@ -62,6 +63,7 @@ extension VideoPlayer {
 
                     PlaybackProgress()
                         .isVisible(isPresentingOverlay && !isPresentingSupplement)
+                        .allowsHitTesting(isPresentingOverlay && !isPresentingSupplement)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.leading, safeAreaInsets.leading)
                         .padding(.trailing, safeAreaInsets.trailing)
@@ -84,6 +86,7 @@ extension VideoPlayer {
 
                 PlaybackButtons()
                     .isVisible(!isScrubbing && containerState.isPresentingPlaybackControls)
+                    .allowsHitTesting(!isScrubbing && containerState.isPresentingPlaybackControls)
             }
             .modifier(VideoPlayer.KeyCommandsModifier())
             .animation(.linear(duration: 0.1), value: isScrubbing)

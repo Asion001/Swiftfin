@@ -75,11 +75,15 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                 }
             } label: {
                 Label(labelTitle, systemImage: VideoPlayerActionButton.sleepTimer.systemImage)
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(.primary, .secondary)
 
                 if isInMenu, controller.isActive {
                     Text(controller.formattedRemainingDuration)
                 }
             }
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(.primary, .secondary)
             .videoPlayerActionButtonTransition()
             .sheet(isPresented: $isCustomDurationPresented) {
                 customDurationSheet

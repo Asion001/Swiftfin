@@ -149,7 +149,7 @@ extension VideoPlayer {
                                     \.panGestureDirection,
                                     containerState.isPresentingSupplement
                                         ? .vertical
-                                        : (containerState.isPresentingOverlay ? .up : .allButDown)
+                                        : .all
                                 )
 
                             playbackControls

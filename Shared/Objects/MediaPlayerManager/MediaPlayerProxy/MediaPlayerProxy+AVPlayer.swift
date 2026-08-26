@@ -31,8 +31,6 @@ class AVMediaPlayerProxy: VideoMediaPlayerProxy, MediaPlayerTrackRebuildPolicy {
     }
 
     let isBuffering: PublishedBox<Bool> = .init(initialValue: false)
-    var isScrubbing: Binding<Bool> = .constant(false)
-    var scrubbedSeconds: Binding<Duration> = .constant(.zero)
     var videoSize: PublishedBox<CGSize> = .init(initialValue: .zero)
     let droppedFrames: PublishedBox<Int> = .init(initialValue: 0)
     let corruptedFrames: PublishedBox<Int> = .init(initialValue: 0)
@@ -106,16 +104,14 @@ class AVMediaPlayerProxy: VideoMediaPlayerProxy, MediaPlayerTrackRebuildPolicy {
         #endif
 
         timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 1, preferredTimescale: 1000),
+            forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
             queue: .main
-        ) { newTime in
+        ) { [weak self] newTime in
             let newSeconds = Duration.seconds(newTime.seconds)
 
-            if !self.isScrubbing.wrappedValue {
-                self.scrubbedSeconds.wrappedValue = newSeconds
+            Task { @MainActor [weak self] in
+                self?.manager?.seconds = newSeconds
             }
-
-            self.manager?.seconds = newSeconds
         }
     }
 
@@ -282,12 +278,8 @@ extension AVMediaPlayerProxy {
 
         @EnvironmentObject
         private var proxy: AVMediaPlayerProxy
-        @EnvironmentObject
-        private var scrubbedSeconds: PublishedBox<Duration>
 
         func makeUIView(context: Context) -> UIView {
-//            proxy.isScrubbing = context.environment.isScrubbing
-//            proxy.scrubbedSeconds = $scrubbedSeconds.value
             UIAVPlayerView(proxy: proxy)
         }
 

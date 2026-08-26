@@ -179,7 +179,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.metadata.outputs.tag }}
         run: |
-          notes="Automated Swiftfin Enhanced build from commit ${{ steps.metadata.outputs.short_sha }}. Includes selectable MetalFX and experimental Anime4K upscaling on iOS/iPadOS (Core Image on Mac Catalyst), a visible orientation- and color-safe A/B comparison, stable player-level subtitle and enhancement dialogs, Apple Pencil-safe controls, zoom-to-fill cropping, realtime quality profiles, source-FPS frame pacing, bounded processing buffering, PiP suspension, customizable text-subtitle positioning, and playback sleep timer. Install iOS/iPadOS through the AltStore Classic source, or use the checksum-verified Apple silicon Mac package."
+          notes="Automated Swiftfin Enhanced build from commit ${{ steps.metadata.outputs.short_sha }}. Includes selectable MetalFX and experimental Anime4K upscaling on iOS/iPadOS (Core Image on Mac Catalyst), a visible orientation- and color-safe A/B comparison, responsive player dialogs and controls, Enhanced-Off progress synchronization, left-brightness and right-volume gestures, trickplay previews with chapter fallback, zoom-to-fill cropping, realtime quality profiles with app CPU and frame-budget diagnostics, source-FPS frame pacing, bounded processing buffering, PiP suspension, customizable text-subtitle positioning, and playback sleep timer. Install iOS/iPadOS through the AltStore Classic source, or use the checksum-verified Apple silicon Mac package."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
               "${{ steps.package.outputs.ipa }}#$IPA_NAME" \
@@ -205,7 +205,7 @@ jobs:
             --info-plist "${{ steps.package.outputs.app }}/Info.plist" \
             --date "${{ steps.metadata.outputs.release_date }}" \
             --download-url "https://github.com/${{ github.repository }}/releases/download/$TAG/$IPA_NAME" \
-            --description "Automated build from ${{ steps.metadata.outputs.short_sha }} with selectable MetalFX and experimental Anime4K enhancement, a visible orientation- and color-safe A/B comparison, stable player dialogs, Apple Pencil-safe controls, zoom-to-fill cropping, realtime quality profiles, source-FPS frame pacing, bounded processing buffering, PiP suspension, customizable subtitles, playback sleep timer, and current upstream Swiftfin changes."
+            --description "Automated build from ${{ steps.metadata.outputs.short_sha }} with selectable MetalFX and experimental Anime4K enhancement, responsive one-touch player controls, Enhanced-Off progress synchronization, left-brightness and right-volume gestures, trickplay previews with chapter fallback, a visible orientation- and color-safe A/B comparison, zoom-to-fill cropping, realtime quality and CPU/frame-budget diagnostics, source-FPS frame pacing, bounded processing buffering, PiP suspension, customizable subtitles, playback sleep timer, and current upstream Swiftfin changes."
 
       - name: Commit updated source
         run: |

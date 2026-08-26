@@ -113,20 +113,23 @@ extension VideoPlayer.UIVideoPlayerContainerViewController {
         unitPoint: UnitPoint
     ) -> any _PanHandlingAction {
         let newAction: any _PanHandlingAction = {
-            if containerState.isPresentingOverlay {
-                Self.SupplementPanHandlingAction
-            } else if direction.isVertical {
-                if unitPoint.x < 0.5 {
-                    panActionForGestureAction(
-                        for: Defaults[.VideoPlayer.Gesture.verticalPanLeftAction]
-                    )
+            if direction.isVertical {
+                let gestureAction = unitPoint.x < 0.5
+                    ? Defaults[.VideoPlayer.Gesture.verticalPanLeftAction]
+                    : Defaults[.VideoPlayer.Gesture.verticalPanRightAction]
+
+                // Brightness and volume remain available while the controls
+                // are visible. A side explicitly configured as None keeps the
+                // existing upward supplement gesture on that side.
+                if gestureAction != .none {
+                    return panActionForGestureAction(for: gestureAction)
                 } else {
-                    panActionForGestureAction(
-                        for: Defaults[.VideoPlayer.Gesture.verticalPanRightAction]
-                    )
+                    return Self.SupplementPanHandlingAction
                 }
+            } else if containerState.isPresentingOverlay {
+                return Self.SupplementPanHandlingAction
             } else {
-                panActionForGestureAction(
+                return panActionForGestureAction(
                     for: Defaults[.VideoPlayer.Gesture.horizontalPanAction]
                 )
             }
