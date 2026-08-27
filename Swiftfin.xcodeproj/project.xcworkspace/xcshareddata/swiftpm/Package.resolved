@@ -1,5 +1,5 @@
 {
-  "originHash" : "b433e23a68c83b4b489e00bb3017a25ea496888b7564ee5c7de62132449841b0",
+  "originHash" : "b501ccd3bf2c7a0d094d8cf50fee349cf271c9c2ce066977edf5fbdbb77ada82",
   "pins" : [
     {
       "identity" : "blurhashkit",
@@ -157,10 +157,10 @@
     {
       "identity" : "mpvkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/mpvkit/MPVKit.git",
+      "location" : "https://github.com/Asion001/MPVKit.git",
       "state" : {
-        "revision" : "288527dffbc6d3e63cce147fc7b520c64a791603",
-        "version" : "1.0.0"
+        "revision" : "2145d9888bebd62c2dcd953aa005f8d3a41a9ac2",
+        "version" : "1.0.0-swiftfin.3"
       }
     },
     {

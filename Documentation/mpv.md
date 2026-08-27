@@ -47,45 +47,63 @@ back to `videotoolbox-copy` and lose zero-copy hardware decoding.
 
 MetalFX therefore runs **inside** `vo_gpu_next`, on the video only:
 
-1. `pl_render_image` renders video to an intermediate texture at source resolution, no overlays.
-2. `MTLFXSpatialScaler` upscales that texture to display resolution.
-3. A second `pl_render_image` composites OSD and subtitles onto the swapchain at full resolution.
+1. `pl_render_image_mix` renders the video into an intermediate texture at source resolution, with
+   no overlays attached to the target.
+2. `MTLFXSpatialScaler` scales that texture up to display resolution.
+3. A second pass composites the upscaled video *and* the overlays onto the swapchain.
 
-Step 3 is the point of this placement: subtitles stay sharp instead of being upscaled with the
-video.
+Step 3 is the point of this placement: subtitles are drawn after the upscale, at native resolution,
+instead of being scaled up with the video. The second pass deliberately uses
+`pl_render_fast_params` rather than the full render params, because hooks and user shaders already
+ran in step 1 and would otherwise be applied twice.
+
+The intermediate textures are `MTLTexture`s imported into libplacebo through `PL_HANDLE_MTL_TEX` —
+the same mechanism mpv's VideoToolbox hwdec already uses — so no copy happens between the render
+pass and the upscaler.
+
+### Options added by the patch
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--metalfx` | `no` | Enable the MetalFX pass |
+| `--metalfx-sharpness` | `0` | Reserved for sharpening control, `0`–`1` |
+| `--metalfx-max-source-height` | `0` | Skip MetalFX above this source height; `0` means no limit |
+
+Swiftfin never assumes these exist: `MPVUpscalerController` probes `option-info/metalfx/name` and
+falls back to shader upscaling on a stock libmpv.
+
+### Known cost
+
+libplacebo renders on MoltenVK's command queue while MetalFX runs on its own, and the two share no
+timeline. The pass therefore calls `pl_gpu_finish()` and waits on the MetalFX command buffer, which
+serializes the GPU once per frame. Replacing that with an external semaphore
+(`pl_vulkan_hold_ex` / `pl_vulkan_release_ex`) is the obvious next optimization.
 
 ### Building the patched libmpv
 
-MPVKit already applies its own libmpv patches — `gpu-context=moltenvk` is one of them
-(`Sources/BuildScripts/patch/libmpv/0001-player-add-moltenvk-context.patch`). Swiftfin's MetalFX
-patch is another file in that directory.
+The fork is `Asion001/MPVKit`. It carries the patch as
+`Sources/BuildScripts/patch/libmpv/0004-metalfx-upscaling.patch`, alongside upstream's own patches —
+`gpu-context=moltenvk` is one of those (`0001-player-add-moltenvk-context.patch`), so this slots
+into an existing mechanism.
 
-Of MPVKit's 38 binary targets only libmpv and FFmpeg are built from source; libplacebo, MoltenVK,
-dav1d, libass and the rest are downloaded prebuilt. A MetalFX rebuild therefore recompiles mpv
-alone.
+Of MPVKit's 38 binary targets only libmpv and FFmpeg build from source; libplacebo, MoltenVK, dav1d,
+libass and the rest download prebuilt. The fork's `Package.swift` overrides only the `Libmpv` binary
+target and leaves every other one pointing at upstream MPVKit releases.
 
-The fork overrides only the `Libmpv` binary target and leaves every other target pointing at
-upstream MPVKit releases:
-
-```
-make build platform=ios,isimulator,maccatalyst
-```
-
-Iterate on the patch against desktop mpv first — it is far faster than an iOS round trip:
+**There is no CI in the fork.** Builds are produced locally and uploaded to the fork's releases:
 
 ```
-make build platform=macos
-./mpv.sh --metalfx=yes <file>
+make build platform=macos                        # desktop mpv for iterating on the patch
+./mpv.sh --vo=gpu-next --metalfx=yes <file>
+
+make build platform=ios,isimulator,maccatalyst   # the xcframework Swiftfin consumes
 ```
 
-Current pins: mpv `v0.41.0`, libplacebo `7.360.1`, FFmpeg `n8.1.2`, MoltenVK `1.4.2`.
+Then zip `dist/release/Libmpv.xcframework`, attach it to a release, and update the target's URL and
+`swift package compute-checksum` value in the fork's `Package.swift`.
 
-### Licensing
-
-libmpv and FFmpeg are LGPL. Swiftfin links MPVKit's non-GPL `MPVKit` product — **not**
-`MPVKit-GPL`, which would force GPL onto the app. `Libmpv.xcframework` is a static archive, so LGPL
-relink compliance rests on the modified libmpv source being published. See
-[third-party notices](third-party-notices.md).
+FFmpeg's build needs `nasm`. Current pins: mpv `v0.41.0`, libplacebo `7.360.1`, FFmpeg `n8.1.2`,
+MoltenVK `1.4.2`.
 
 ## Debugging
 

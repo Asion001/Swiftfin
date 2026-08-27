@@ -29,7 +29,7 @@
 
 ### Swiftfin Enhanced AltStore source
 
-This fork publishes an unofficial iOS/iPadOS build with selectable Apple MetalFX and experimental Anime4K enhancement, source-FPS frame pacing, customizable text-subtitle size and black-bar positioning, and a background-safe playback sleep timer. MetalFX remains the recommended default for sustained performance. Add the following source URL to **AltStore Classic**:
+This fork publishes an unofficial iOS/iPadOS build whose headline addition is the **MPV** player: libmpv with VideoToolbox hardware decoding and libplacebo rendering, which direct plays effectively any container and codec instead of asking the server to remux or transcode. It adds MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, an editable `mpv.conf`, customizable text-subtitle size and positioning, and a background-safe playback sleep timer. Add the following source URL to **AltStore Classic**:
 
 ```text
 https://raw.githubusercontent.com/Asion001/Swiftfin/main/altstore-source.json
@@ -62,6 +62,7 @@ Swiftfin provides detailed documentation to help you understand key aspects of t
 
 - [🎞️ Library Support](https://github.com/jellyfin/Swiftfin/blob/main/Documentation/libraries.md) — Information on **library compatibility** and supported media types in Swiftin.
 - [🎬 Media Playback](https://github.com/jellyfin/Swiftfin/blob/main/Documentation/players.md) — Learn about Swiftfin's **Native** and **Swiftfin** players and how their features vary.
+- [🧿 The MPV Player](Documentation/mpv.md) — How this fork's **MPV** player is wired, and how its patched libmpv is built.
 - [🧩 OS Version Support](https://github.com/jellyfin/Swiftfin/blob/main/Documentation/version.md) — Read about how we determine the **minimum supported OS** and which versions of iOS & tvOS are supported.
 - [🐞 Common Issues](https://github.com/jellyfin/Swiftfin/blob/main/Documentation/common_issues.md) — If you are experiencing an issue with Swiftfin, this is the best place to start.
 - [💜 Supporting Development](https://jellyfin.org/docs/general/contributing/direct-donations) — Learn how you can **support the project developers** and help keep Swiftfin improving.
