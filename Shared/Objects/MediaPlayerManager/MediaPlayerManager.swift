@@ -156,6 +156,11 @@ final class MediaPlayerManager: ViewModel {
             case .playbackInformation:
                 guard let itemID = item.id else { return nil }
                 return PlaybackInformationSupplement(itemID: itemID)
+            #if os(iOS)
+            case .mpvStatistics:
+                guard Defaults[.VideoPlayer.videoPlayerType] == .mpv else { return nil }
+                return MPVStatisticsSupplement()
+            #endif
             }
         }
     }

@@ -12,22 +12,47 @@ import Foundation
 
 enum VideoEnhancementProvider: String, CaseIterable, Displayable, Storable {
     case metalFX
-    case anime4K
+    case shader
 
+    /// The raw value stored while the shader provider was the Anime4K Metal
+    /// implementation, before it was replaced by MPV's GLSL shaders.
+    private static let legacyAnime4KRawValue = "anime4K"
+
+    /// Both providers run inside MPV now, so neither is platform-gated: the
+    /// shader provider is a libplacebo chain rather than a Metal pipeline.
+    ///
+    /// MetalFX additionally requires Swiftfin's patched libmpv, which is probed
+    /// at runtime by `MPVUpscalerController` rather than assumed here.
     static var supportedCases: [Self] {
-        #if targetEnvironment(macCatalyst) || targetEnvironment(simulator)
-        [.metalFX]
-        #else
         allCases
-        #endif
+    }
+
+    init(from decoder: any Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+
+        if rawValue == Self.legacyAnime4KRawValue {
+            self = .shader
+            return
+        }
+
+        guard let value = Self(rawValue: rawValue) else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Unknown enhancement provider: \(rawValue)"
+                )
+            )
+        }
+
+        self = value
     }
 
     var displayTitle: String {
         switch self {
         case .metalFX:
             "MetalFX"
-        case .anime4K:
-            "Anime4K (Experimental)"
+        case .shader:
+            String(localized: "enhancement.provider.shader", defaultValue: "GPU shader")
         }
     }
 }
@@ -142,29 +167,33 @@ enum VideoEnhancementBypassReason: Equatable, Sendable {
 }
 
 enum VideoEnhancementStrings {
-    static let title = String(localized: "enhancement.title", defaultValue: "Anime enhancement")
-    static let comparison = String(localized: "enhancement.comparison", defaultValue: "A/B comparison")
+    static let title = String(localized: "enhancement.title", defaultValue: "Upscaling")
     static let upscaler = String(localized: "enhancement.upscaler", defaultValue: "Upscaler")
-    static let anime4KWarning = String(
-        localized: "enhancement.anime4k-warning",
-        defaultValue: "Anime4K uses a legacy multi-pass shader and can run hotter or drop frames. MetalFX is recommended for sustained playback."
+    static let active = String(localized: "enhancement.active", defaultValue: "Active")
+
+    static func missingShaders(_ names: String) -> String {
+        String(
+            localized: "enhancement.missing-shaders",
+            defaultValue: "These shader files are missing from this build: \(names)"
+        )
+    }
+
+    static let shaderWarning = String(
+        localized: "enhancement.shader-warning",
+        defaultValue: "Shader upscaling runs a neural network on every frame and can run hotter or drop frames on higher tiers."
     )
-    static let matchSourceFrameRate = String(
-        localized: "enhancement.match-source-frame-rate",
-        defaultValue: "Match source FPS"
+    static let metalFXUnavailable = String(
+        localized: "enhancement.metalfx-unavailable",
+        defaultValue: "MetalFX needs Swiftfin's enhanced MPV build. This build will use the original picture instead."
     )
     static let performance = String(localized: "enhancement.performance", defaultValue: "Performance monitor")
     static let energyWarning = String(
         localized: "enhancement.energy-warning",
-        defaultValue: "Real-time enhancement uses the GPU and may increase battery use and device temperature. Auto mode reduces edge enhancement before playback is affected."
+        defaultValue: "Real-time upscaling uses the GPU and may increase battery use and device temperature."
     )
-    static let enhancedPlayerDescription = String(
+    static let mpvPlayerDescription = String(
         localized: "enhancement.player-description",
-        defaultValue: "Uses Apple's AVPlayer and GPU-accelerated system scaling for efficient real-time upscaling. Unsupported formats may be remuxed or transcoded by Jellyfin. HDR, AirPlay, and Picture in Picture use the original picture."
-    )
-    static let frameRateExplanation = String(
-        localized: "enhancement.frame-rate-explanation",
-        defaultValue: "Match source FPS reduces presentation work and repeats each enhanced source frame at its original cadence. It does not create interpolated frames. Turn it off to present at the display's maximum refresh rate."
+        defaultValue: "Plays nearly any container and codec with MPV, using VideoToolbox hardware decoding and libplacebo rendering. Upscaling, tone mapping, and subtitle rendering all happen on device."
     )
 }
 

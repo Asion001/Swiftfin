@@ -68,6 +68,21 @@ struct UserSignInView: View {
                 evaluatedPolicyMap: .init(action: processEvaluatedPolicy)
             )
         case let .existingUser(existingUser):
+            if !existingUser.state.state.hasAccessToken, let authenticationAction {
+                let accessPolicy = existingUser.state.state.accessPolicy
+                viewModel.saveExisting(
+                    user: existingUser,
+                    replaceForAccessToken: true,
+                    authenticationAction: (
+                        authenticationAction,
+                        accessPolicy,
+                        accessPolicy.authenticateReason(user: existingUser.state.state)
+                    ),
+                    evaluatedPolicyMap: .init(action: processEvaluatedPolicy)
+                )
+                return
+            }
+
             self.existingUser = existingUser
             self.isPresentingExistingUser = true
         case let .saved(user):

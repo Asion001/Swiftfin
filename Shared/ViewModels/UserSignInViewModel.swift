@@ -203,6 +203,11 @@ final class UserSignInViewModel: ObservableObject {
         let userState = user.state.state
 
         let savedUserState = userState
+        guard savedUserState.setAccessToken(user.state.accessToken) else {
+            logger.critical("Unable to persist user access token")
+            throw ErrorMessage(L10n.unknownError)
+        }
+
         var users = StoredValues[.User.users]
         users.removeAll { $0.id == savedUserState.id }
         users.append(savedUserState)
@@ -225,7 +230,6 @@ final class UserSignInViewModel: ObservableObject {
         }
 
         savedUserState.accessPolicy = accessPolicy
-        savedUserState.accessToken = user.state.accessToken
         savedUserState.data = user.data
 
         if let evaluatedPinPolicy = evaluatedPolicy as? PinEvaluatedUserAccessPolicy {
@@ -263,7 +267,10 @@ final class UserSignInViewModel: ObservableObject {
         }
 
         if replaceForAccessToken {
-            user.state.state.accessToken = user.state.accessToken
+            guard user.state.state.setAccessToken(user.state.accessToken) else {
+                logger.critical("Unable to replace user access token")
+                throw ErrorMessage(L10n.unknownError)
+            }
         }
 
         events.send(.saved(user.state.state))

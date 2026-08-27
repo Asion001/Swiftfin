@@ -131,10 +131,10 @@ struct VideoPlayer: View {
             containerState.scrubbedSeconds.value = newItem?.baseItem.startSeconds ?? .zero
         }
         .onReceive(manager.secondsBox.$value) { newSeconds in
-            // VLC writes this value directly from its playback callback. The
-            // AVPlayer-backed Enhanced presentation has no AVPlayerView in the
+            // VLC writes this value directly from its playback callback. MPV
+            // renders into its own Metal layer with no AVPlayerView in the
             // SwiftUI hierarchy, so keep the shared progress clock synchronized
-            // at the player level for both native and enhanced passthrough.
+            // at the player level for every backend.
             guard !containerState.isScrubbing else { return }
             containerState.scrubbedSeconds.value = newSeconds
         }
@@ -165,8 +165,8 @@ struct VideoPlayer: View {
                 case .subtitles:
                     EnhancedSubtitleSettingsView()
                 case .enhancement:
-                    if let controller = (manager.proxy as? AVMediaPlayerProxy)?.enhancementController {
-                        EnhancedEnhancementSettingsView(controller: controller)
+                    if let controller = (manager.proxy as? MPVMediaPlayerProxy)?.upscaler {
+                        MPVUpscalerSettingsView(controller: controller)
                     } else {
                         ContentUnavailableView(
                             VideoEnhancementStrings.title,

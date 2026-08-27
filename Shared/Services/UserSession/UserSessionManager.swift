@@ -335,6 +335,11 @@ final class UserSessionManager: ObservableObject {
             throw UserSessionError.invalidStoredSession(userID: userId)
         }
 
+        guard user.hasAccessToken else {
+            Defaults[.lastSignedInUserID] = .signedOut
+            throw UserSessionError.missingAccessToken(userID: userId)
+        }
+
         return .init(
             server: server,
             user: user

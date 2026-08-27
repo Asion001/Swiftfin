@@ -292,7 +292,7 @@ extension Defaults.Keys {
 
         static var videoPlayerType: Key<VideoPlayerType> {
             #if targetEnvironment(macCatalyst)
-            UserKey("videoPlayerType", default: .enhanced)
+            UserKey("videoPlayerType", default: .mpv)
             #else
             UserKey("videoPlayerType", default: .swiftfin)
             #endif
@@ -307,12 +307,24 @@ extension Defaults.Keys {
             UserKey("videoEnhancementMode", default: .auto)
         }
 
-        static var enhancementMatchesSourceFrameRate: Key<Bool> {
-            UserKey("videoEnhancementMatchesSourceFrameRate", default: true)
+        // MARK: MPV
+
+        /// Applied before `mpv_initialize`. A user's own `mpv.conf` is read
+        /// afterwards and therefore overrides all of these.
+        static var mpvHardwareDecoding: Key<Bool> {
+            UserKey("mpvHardwareDecoding", default: true)
         }
 
-        static var enhancementPerformanceHUD: Key<Bool> {
-            UserKey("videoEnhancementPerformanceHUD", default: false)
+        static var mpvDeinterlace: Key<Bool> {
+            UserKey("mpvDeinterlace", default: true)
+        }
+
+        static var mpvDeband: Key<Bool> {
+            UserKey("mpvDeband", default: false)
+        }
+
+        static var mpvCacheMegabytes: Key<Int> {
+            UserKey("mpvCacheMegabytes", default: 256)
         }
         #endif
 

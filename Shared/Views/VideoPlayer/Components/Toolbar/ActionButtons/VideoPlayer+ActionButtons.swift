@@ -54,8 +54,10 @@ extension VideoPlayer.PlaybackControls.Toolbar {
             }
 
             #if os(iOS)
-            if Defaults[.VideoPlayer.videoPlayerType] != .enhanced {
+            /// Both are MPV-only: nothing else can upscale or capture a frame.
+            if Defaults[.VideoPlayer.videoPlayerType] != .mpv {
                 filteredButtons.removeAll { $0 == .enhancement }
+                filteredButtons.removeAll { $0 == .screenshot }
             }
             #endif
 
@@ -69,11 +71,17 @@ extension VideoPlayer.PlaybackControls.Toolbar {
         private var menuActionButtons: [VideoPlayerActionButton] {
             var buttons = resolvedActionButtons(rawMenuActionButtons)
             #if os(iOS)
-            if Defaults[.VideoPlayer.videoPlayerType] == .enhanced,
+            if Defaults[.VideoPlayer.videoPlayerType] == .mpv,
                !rawBarActionButtons.contains(.enhancement),
                !rawMenuActionButtons.contains(.enhancement)
             {
                 buttons.append(.enhancement)
+            }
+            if Defaults[.VideoPlayer.videoPlayerType] == .mpv,
+               !rawBarActionButtons.contains(.screenshot),
+               !rawMenuActionButtons.contains(.screenshot)
+            {
+                buttons.append(.screenshot)
             }
             if !rawBarActionButtons.contains(.sleepTimer),
                !rawMenuActionButtons.contains(.sleepTimer)
@@ -103,7 +111,7 @@ extension VideoPlayer.PlaybackControls.Toolbar {
         private func isMenuButton(_ button: VideoPlayerActionButton) -> Bool {
             switch button {
             #if os(iOS)
-            case .enhancement, .sleepTimer:
+            case .enhancement, .screenshot, .sleepTimer:
                 true
             #endif
             case .audio, .playbackSpeed, .playbackSettings, .subtitles:
@@ -127,6 +135,8 @@ extension VideoPlayer.PlaybackControls.Toolbar {
                 Enhancement()
             case .gestureLock:
                 GestureLock()
+            case .screenshot:
+                Screenshot()
             case .sleepTimer:
                 SleepTimer()
             #endif

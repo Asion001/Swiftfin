@@ -17,8 +17,8 @@ extension VideoPlayerType {
     var codecProfiles: [CodecProfile] {
         switch self {
         #if os(iOS)
-        case .enhanced:
-            Self._nativeCodecProfiles
+        case .mpv:
+            Self._mpvCodecProfiles
         #endif
         case .native:
             Self._nativeCodecProfiles

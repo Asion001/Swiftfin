@@ -1,0 +1,448 @@
+//
+// Swiftfin is subject to the terms of the Mozilla Public
+// License, v2.0. If a copy of the MPL was not distributed with this
+// file, you can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
+//
+
+#if os(iOS)
+import Combine
+import Defaults
+import FactoryKit
+import Foundation
+@preconcurrency import JellyfinAPI
+import Metal
+import QuartzCore
+import SwiftUI
+import UIKit
+
+@MainActor
+final class MPVPlaybackDiagnostics: ObservableObject {
+    @Published
+    private(set) var logs: [String] = []
+    @Published
+    private(set) var properties: [String: MPVPropertyValue] = [:]
+    @Published
+    private(set) var tracks: [MPVTrack] = []
+    @Published
+    private(set) var latestScreenshotURL: URL?
+
+    func record(property name: String, value: MPVPropertyValue) {
+        properties[name] = value
+    }
+
+    func record(log: String) {
+        logs.append(log.trimmingCharacters(in: .newlines))
+        if logs.count > 500 {
+            logs.removeFirst(logs.count - 500)
+        }
+    }
+
+    func record(tracks: [MPVTrack]) {
+        self.tracks = tracks
+    }
+
+    func record(screenshot url: URL) {
+        latestScreenshotURL = url
+    }
+
+    func clearLogs() {
+        logs.removeAll(keepingCapacity: true)
+    }
+}
+
+@MainActor
+final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
+    MediaPlayerOffsetConfigurable,
+    MediaPlayerSubtitleConfigurable,
+    MediaPlayerScreenshotCapturing
+{
+    let isBuffering: PublishedBox<Bool> = .init(initialValue: false)
+    let videoSize: PublishedBox<CGSize> = .init(initialValue: .zero)
+    let droppedFrames: PublishedBox<Int> = .init(initialValue: 0)
+    let corruptedFrames: PublishedBox<Int> = .init(initialValue: 0)
+    let diagnostics = MPVPlaybackDiagnostics()
+    let upscaler: MPVUpscalerController
+
+    private let client: MPVClientCore
+    private let configurationStore: MPVConfigurationStore
+    private var decoderDroppedFrames = 0
+    private var itemObserver: AnyCancellable?
+    private var managerStateObserver: AnyCancellable?
+    private var outputDroppedFrames = 0
+    private var playbackItem: MediaPlayerItem?
+    private var rateObserver: AnyCancellable?
+    private var sourceHeight = 0
+    private var sourceWidth = 0
+    private weak var metalLayer: CAMetalLayer?
+    private var transferFunction: String?
+    private var signalPeak: Double = 1
+
+    weak var manager: MediaPlayerManager? {
+        didSet {
+            for var observer in observers {
+                observer.manager = manager
+            }
+
+            itemObserver = manager?.$playbackItem
+                .sink { [weak self] item in
+                    guard let item else { return }
+                    self?.load(item: item)
+                }
+            managerStateObserver = manager?.$state
+                .sink { [weak self] state in
+                    if state == .stopped {
+                        self?.client.shutdown()
+                    }
+                }
+            rateObserver = manager?.$rate
+                .sink { [weak self] rate in
+                    self?.client.setRate(Double(rate))
+                }
+        }
+    }
+
+    var observers: [any MediaPlayerObserver] = [
+        NowPlayableObserver(),
+    ]
+
+    init(
+        configurationStore: MPVConfigurationStore = .shared,
+        client: MPVClientCore? = nil
+    ) {
+        self.configurationStore = configurationStore
+        self.upscaler = MPVUpscalerController(configurationStore: configurationStore)
+        self.client = client ?? MPVClientCore(configurationStore: configurationStore)
+        self.client.setEventHandler { [weak self] event in
+            DispatchQueue.main.async { [weak self] in
+                self?.handle(event: event)
+            }
+        }
+    }
+
+    func play() {
+        client.play()
+    }
+
+    func pause() {
+        client.pause()
+    }
+
+    func stop() {
+        client.stopPlayback()
+    }
+
+    func jumpForward(_ seconds: Duration) {
+        client.seek(by: seconds.seconds)
+    }
+
+    func jumpBackward(_ seconds: Duration) {
+        client.seek(by: -seconds.seconds)
+    }
+
+    func setRate(_ rate: Float) {
+        client.setRate(Double(rate))
+    }
+
+    func setSeconds(_ seconds: Duration) {
+        client.seek(to: seconds.seconds)
+    }
+
+    func setAudioStream(_ stream: MediaStream) {
+        client.selectTrack(kind: .audio, ffIndex: stream.index)
+    }
+
+    func setSubtitleStream(_ stream: MediaStream) {
+        client.selectTrack(kind: .subtitle, ffIndex: stream.index)
+    }
+
+    func setAspectFill(_ aspectFill: Bool) {
+        client.setAspectFill(aspectFill)
+    }
+
+    func setAudioOffset(_ seconds: Duration) {
+        client.setAudioDelay(seconds.seconds)
+    }
+
+    func setSubtitleOffset(_ seconds: Duration) {
+        client.setSubtitleDelay(seconds.seconds)
+    }
+
+    func setSubtitleConfiguration(_ configuration: SubtitleConfiguration) {
+        let basePosition: Double
+        switch configuration.position {
+        case .automatic, .lowerBlackBar, .screenBottom:
+            basePosition = 100
+            client.setOption(name: "sub-use-margins", value: "yes")
+            client.setOption(name: "sub-ass-force-margins", value: "yes")
+        case .insideVideo:
+            basePosition = 94
+            client.setOption(name: "sub-use-margins", value: "no")
+            client.setOption(name: "sub-ass-force-margins", value: "no")
+        }
+
+        let position = min(150, max(0, basePosition + Double(configuration.verticalOffset) / 10))
+        client.setOption(name: "sub-font", value: configuration.fontName)
+        client.setOption(
+            name: "sub-font-size",
+            value: String(Int(EnhancedSubtitleGeometry.fontPointSize(for: configuration.size)))
+        )
+        client.setOption(name: "sub-color", value: configuration.color.hexString)
+        client.setOption(name: "sub-pos", value: String(position))
+        client.setOption(name: "sub-ass-override", value: "force")
+    }
+
+    func takeScreenshot(includeSubtitles: Bool = true) throws -> URL {
+        try configurationStore.prepare()
+        let url = configurationStore.screenshotURL()
+        client.takeScreenshot(to: url, includeSubtitles: includeSubtitles)
+        diagnostics.record(screenshot: url)
+        return url
+    }
+
+    /// Whether MPV is presenting an HDR transfer function.
+    ///
+    /// `sig-peak` is reported relative to SDR reference white, so anything above
+    /// 1 is brighter than SDR. The transfer function is the more reliable
+    /// signal; the peak covers sources that do not report one.
+    var isHighDynamicRange: Bool {
+        if let transferFunction, ["pq", "hlg"].contains(transferFunction) {
+            return true
+        }
+
+        return signalPeak > 1
+    }
+
+    func attach(to layer: CAMetalLayer) {
+        metalLayer = layer
+        client.attach(to: layer)
+        upscaler.attach(to: client)
+        updateDynamicRange()
+    }
+
+    @ViewBuilder
+    var videoPlayerBody: some View {
+        MPVPlayerSurface(proxy: self)
+    }
+}
+
+private extension MPVMediaPlayerProxy {
+
+    func load(item: MediaPlayerItem) {
+        playbackItem = item
+        isBuffering.value = true
+        diagnostics.record(log: "Loading \(item.url.lastPathComponent)")
+
+        let audioIndex = item.indexMap.playerIndex(for: item.selectedAudioStreamIndex)
+        let subtitleIndex = item.indexMap.playerIndex(for: item.selectedSubtitleStreamIndex)
+        client.selectTrack(kind: .audio, ffIndex: audioIndex)
+        client.selectTrack(kind: .subtitle, ffIndex: subtitleIndex)
+        client.load(url: item.url)
+    }
+
+    func handle(event: MPVClientCore.Event) {
+        switch event {
+        case let .endFile(error):
+            isBuffering.value = false
+            if let error {
+                manager?.error(ErrorMessage("MPV error: \(error)"))
+            } else if playbackItem?.baseItem.isLiveStream == false {
+                manager?.ended()
+            }
+        case .fileLoaded:
+            handleFileLoaded()
+        case let .log(message):
+            diagnostics.record(log: message)
+            manager?.logger.trace("MPV: \(message)")
+        case let .property(name, value):
+            diagnostics.record(property: name, value: value)
+            handleProperty(name: name, value: value)
+        case let .tracks(tracks):
+            diagnostics.record(tracks: tracks)
+            resolveSubtitleTracksIfPossible(tracks)
+        }
+    }
+
+    func handleFileLoaded() {
+        guard let playbackItem else { return }
+        isBuffering.value = false
+
+        for subtitle in playbackItem.subtitleStreams.sidecarSubtitles {
+            guard let url = externalSubtitleURL(for: subtitle) else { continue }
+            client.addSubtitle(url: url, title: subtitle.displayTitle)
+        }
+
+        let startSeconds = max(
+            .zero,
+            (playbackItem.baseItem.startSeconds ?? .zero)
+                - Duration.seconds(Defaults[.VideoPlayer.resumeOffset])
+        )
+        if startSeconds > .zero {
+            client.seek(to: startSeconds.seconds)
+        }
+        client.setRate(Double(manager?.rate ?? 1))
+        setSubtitleConfiguration(Defaults[.VideoPlayer.Subtitle.configuration])
+        client.play()
+    }
+
+    func handleProperty(name: String, value: MPVPropertyValue) {
+        switch (name, value) {
+        case let ("time-pos", .double(seconds)):
+            manager?.seconds = .seconds(seconds)
+        case let ("pause", .bool(isPaused)):
+            manager?.setPlaybackRequestStatus(status: isPaused ? .paused : .playing)
+        case let ("paused-for-cache", .bool(isPausedForCache)):
+            isBuffering.value = isPausedForCache
+        case let ("width", .integer(width)):
+            sourceWidth = Int(width)
+            updateVideoSize()
+        case let ("height", .integer(height)):
+            sourceHeight = Int(height)
+            updateVideoSize()
+        case let ("video-params/gamma", .string(gamma)):
+            transferFunction = gamma
+            updateDynamicRange()
+        case ("video-params/gamma", .unavailable):
+            transferFunction = nil
+            updateDynamicRange()
+        case let ("video-params/sig-peak", .double(peak)):
+            signalPeak = peak
+            updateDynamicRange()
+        case let ("decoder-frame-drop-count", .integer(count)):
+            decoderDroppedFrames = Int(count)
+            updateDroppedFrames()
+        case let ("frame-drop-count", .integer(count)):
+            outputDroppedFrames = Int(count)
+            updateDroppedFrames()
+        default:
+            break
+        }
+    }
+
+    func updateVideoSize() {
+        videoSize.value = CGSize(width: sourceWidth, height: sourceHeight)
+    }
+
+    /// Requesting EDR headroom unconditionally makes SDR content wash out on
+    /// some displays, so it follows the actual video parameters.
+    func updateDynamicRange() {
+        metalLayer?.wantsExtendedDynamicRangeContent = isHighDynamicRange
+    }
+
+    func updateDroppedFrames() {
+        droppedFrames.value = decoderDroppedFrames + outputDroppedFrames
+    }
+
+    func resolveSubtitleTracksIfPossible(_ tracks: [MPVTrack]) {
+        guard let playbackItem else { return }
+        let sidecarCount = playbackItem.subtitleStreams.sidecarSubtitles.count
+        let subtitleTracks = tracks.filter { $0.kind == .subtitle }
+        guard sidecarCount == 0 || subtitleTracks.count(where: { $0.isExternal }) >= sidecarCount else {
+            return
+        }
+
+        playbackItem.getSubtitleIndexes(
+            subtitleTracks: subtitleTracks.map { track in
+                (index: track.ffIndex ?? Int(track.id), title: track.title)
+            }
+        )
+    }
+
+    func externalSubtitleURL(for stream: MediaStream) -> URL? {
+        guard let deliveryURL = stream.deliveryURL,
+              let client = Container.shared.currentUserSession()?.client
+        else { return nil }
+
+        let path = deliveryURL.removingFirst(
+            if: client.configuration.url.absoluteString.last == "/"
+        )
+        return client.url(path: path)
+    }
+}
+
+private struct MPVPlayerSurface: UIViewRepresentable {
+    @ObservedObject
+    var proxy: MPVMediaPlayerProxy
+
+    func makeUIView(context: Context) -> MPVPlayerUIView {
+        MPVPlayerUIView(proxy: proxy)
+    }
+
+    func updateUIView(_ uiView: MPVPlayerUIView, context: Context) {
+        uiView.updateDrawableSize()
+    }
+}
+
+private final class MPVPlayerUIView: UIView {
+    override class var layerClass: AnyClass {
+        MPVMetalLayer.self
+    }
+
+    private let proxy: MPVMediaPlayerProxy
+
+    init(proxy: MPVMediaPlayerProxy) {
+        self.proxy = proxy
+        super.init(frame: .zero)
+
+        backgroundColor = .black
+        isOpaque = true
+
+        guard let metalLayer = layer as? CAMetalLayer else { return }
+        metalLayer.device = MTLCreateSystemDefaultDevice()
+        metalLayer.framebufferOnly = true
+        metalLayer.isOpaque = true
+        metalLayer.backgroundColor = UIColor.black.cgColor
+        metalLayer.contentsScale = UIScreen.main.nativeScale
+        metalLayer.pixelFormat = .bgra8Unorm
+        /// Raised by the proxy once MPV reports an HDR transfer function.
+        metalLayer.wantsExtendedDynamicRangeContent = false
+        proxy.attach(to: metalLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateDrawableSize()
+    }
+
+    func updateDrawableSize() {
+        guard let metalLayer = layer as? CAMetalLayer else { return }
+        metalLayer.contentsScale = window?.screen.nativeScale ?? UIScreen.main.nativeScale
+        metalLayer.drawableSize = CGSize(
+            width: bounds.width * metalLayer.contentsScale,
+            height: bounds.height * metalLayer.contentsScale
+        )
+    }
+}
+
+private final class MPVMetalLayer: CAMetalLayer {
+    override var drawableSize: CGSize {
+        get { super.drawableSize }
+        set {
+            // MoltenVK may transiently request 1×1 while completing an old
+            // presentation. Accepting it causes a visible flash and can leave
+            // the layer stuck at that size after rotation or zoom-to-fill.
+            guard newValue.width > 1, newValue.height > 1 else { return }
+            super.drawableSize = newValue
+        }
+    }
+
+    override var wantsExtendedDynamicRangeContent: Bool {
+        get { super.wantsExtendedDynamicRangeContent }
+        set {
+            if Thread.isMainThread {
+                super.wantsExtendedDynamicRangeContent = newValue
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    self?.wantsExtendedDynamicRangeContent = newValue
+                }
+            }
+        }
+    }
+}
+#endif

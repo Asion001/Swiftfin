@@ -93,8 +93,8 @@ struct VideoPlayerViewShim: View {
             case .native:
                 NativeVideoPlayer()
             #if os(iOS)
-            case .enhanced:
-                VideoPlayer(proxy: AVMediaPlayerProxy(presentation: .enhanced))
+            case .mpv:
+                VideoPlayer(proxy: MPVMediaPlayerProxy())
             #endif
             }
         }

@@ -27,12 +27,16 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
     }
 }
 
-struct EnhancedEnhancementSettingsView: View {
+struct MPVUpscalerSettingsView: View {
     @Environment(\.dismiss)
     private var dismiss
 
     @ObservedObject
-    var controller: VideoEnhancementController
+    var controller: MPVUpscalerController
+
+    private var isMetalFXUnavailable: Bool {
+        controller.requestedProvider == .metalFX && !controller.isMetalFXSupported
+    }
 
     var body: some View {
         NavigationStack {
@@ -58,32 +62,25 @@ struct EnhancedEnhancementSettingsView: View {
                         }
                     }
                 } footer: {
-                    if controller.requestedProvider == .anime4K {
-                        Text(VideoEnhancementStrings.anime4KWarning)
+                    if isMetalFXUnavailable {
+                        Text(VideoEnhancementStrings.metalFXUnavailable)
+                    } else if controller.requestedProvider == .shader {
+                        Text(VideoEnhancementStrings.shaderWarning)
                     }
                 }
 
                 Section {
-                    Toggle(
-                        VideoEnhancementStrings.comparison,
-                        isOn: $controller.isComparisonEnabled
+                    LabeledContent(
+                        VideoEnhancementStrings.active,
+                        value: controller.activeDescription
                     )
-                    .disabled(controller.bypassReason != nil)
-
-                    Toggle(
-                        VideoEnhancementStrings.matchSourceFrameRate,
-                        isOn: $controller.matchesSourceFrameRate
-                    )
-
-                    Toggle(
-                        VideoEnhancementStrings.performance,
-                        isOn: $controller.showsPerformanceHUD
-                    )
-                }
-
-                if let bypassReason = controller.bypassReason {
-                    Section {
-                        Label(bypassReason.displayTitle, systemImage: "info.circle")
+                } footer: {
+                    if controller.missingShaders.isNotEmpty {
+                        Text(
+                            VideoEnhancementStrings.missingShaders(
+                                controller.missingShaders.joined(separator: ", ")
+                            )
+                        )
                     }
                 }
             }

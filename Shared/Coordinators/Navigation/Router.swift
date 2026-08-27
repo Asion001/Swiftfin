@@ -15,6 +15,10 @@ extension NavigationCoordinator {
 
         let navigationCoordinator: NavigationCoordinator?
 
+        var isRootOfPath: Bool {
+            navigationCoordinator?.path.isEmpty ?? false
+        }
+
         func route(
             to route: NavigationRoute,
             transition: NavigationRoute.TransitionType? = nil,
@@ -36,20 +40,8 @@ struct Router: DynamicProperty {
         let router: NavigationCoordinator.Router
         let dismiss: DismissAction
 
-        private let isRootBox: PublishedBox<Bool?> = .init(initialValue: nil)
-
         var isRootOfPath: Bool {
-            if let boxValue = isRootBox.value {
-                return boxValue
-            }
-
-            guard let router = router.navigationCoordinator else {
-                return false
-            }
-
-            let value = router.path.isEmpty
-            isRootBox.value = value
-            return value
+            router.isRootOfPath
         }
 
         func route(
@@ -92,19 +84,16 @@ struct Router: DynamicProperty {
     @Environment(\.self)
     private var environment
 
-    private let wrapperBox: PublishedBox<Wrapper?> = .init(initialValue: nil)
-
     var wrappedValue: Wrapper {
-        if let wrapper = wrapperBox.value {
-            return wrapper
-        }
-
-        let value = Wrapper(
+        // Environment values can change while SwiftUI keeps the same view
+        // identity, for example after switching tabs or presenting and
+        // dismissing a sheet. Holding on to the first router sends later taps
+        // to a coordinator that is no longer on screen, which makes otherwise
+        // valid buttons appear unresponsive until the view is recreated.
+        Wrapper(
             router: environment.router,
             dismiss: environment.dismiss
         )
-        wrapperBox.value = value
-        return value
     }
 }
 

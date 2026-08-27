@@ -38,6 +38,22 @@ extension NavigationRoute {
     }
 
     #if os(iOS)
+    static func mpvFileEditor(
+        title: String,
+        url: URL,
+        defaultContents: String,
+        footer: String
+    ) -> NavigationRoute {
+        NavigationRoute(id: "mpvFileEditor-\(url.lastPathComponent)") {
+            MPVFileEditorView(
+                title: title,
+                url: url,
+                defaultContents: defaultContents,
+                footer: footer
+            )
+        }
+    }
+
     static var adminDashboard: NavigationRoute {
         NavigationRoute(
             id: "adminDashboard"

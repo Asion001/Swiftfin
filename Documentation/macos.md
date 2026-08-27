@@ -2,6 +2,8 @@
 
 Swiftfin Enhanced is published as a native Mac Catalyst app for Apple silicon Macs. It uses AVPlayer hardware decoding and supports the Native and Enhanced players; VLC is excluded because MobileVLCKit does not provide a Mac Catalyst binary.
 
+The automated personal build is ad-hoc signed, so macOS cannot grant it a provisioning-backed Catalyst Keychain access group. Swiftfin first attempts the system Keychain and, when that is unavailable, stores login tokens in an app-private credential file under the current user's Application Support directory. The credential directory is restricted to the current macOS account (`0700`) and the file to that account (`0600`). A Developer ID or App Store build should use the system Keychain instead.
+
 The current build requires macOS 15.6 or later and an Apple silicon Mac. The Catalyst app uses Apple's GPU-accelerated Core Image Lanczos scaler because MetalFX has no Mac Catalyst ABI; iPhone and iPad can select MetalFX or experimental Anime4K. Anime4K is intentionally unavailable in the Catalyst build. The same Off, Auto, Fast, Balanced, and Quality controls are available on all three devices. Auto remains the recommended mode because display size, source frame rate, power mode, and thermal conditions still affect sustainable quality.
 
 ## Install with automatic updates

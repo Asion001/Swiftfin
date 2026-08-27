@@ -13,6 +13,9 @@ enum VideoPlayerSupplement: String, CaseIterable, Displayable, Equatable, Identi
     case queue
     case playbackInformation
     case people
+    #if os(iOS)
+    case mpvStatistics
+    #endif
 
     var displayTitle: String {
         switch self {
@@ -26,6 +29,10 @@ enum VideoPlayerSupplement: String, CaseIterable, Displayable, Equatable, Identi
             L10n.people
         case .playbackInformation:
             L10n.session
+        #if os(iOS)
+        case .mpvStatistics:
+            MPVStatisticsStrings.title
+        #endif
         }
     }
 
@@ -45,6 +52,10 @@ enum VideoPlayerSupplement: String, CaseIterable, Displayable, Equatable, Identi
             "person.2.fill"
         case .playbackInformation:
             "waveform.circle.fill"
+        #if os(iOS)
+        case .mpvStatistics:
+            "chart.bar.doc.horizontal.fill"
+        #endif
         }
     }
 

@@ -127,6 +127,12 @@ struct SelectUserView: View {
     }
 
     private func select(user: UserState) {
+        guard user.hasAccessToken else {
+            guard let server = viewModel.servers.keys.first(where: { $0.id == user.serverID }) else { return }
+            addUser(server: server)
+            return
+        }
+
         Task { @MainActor in
 
             do {

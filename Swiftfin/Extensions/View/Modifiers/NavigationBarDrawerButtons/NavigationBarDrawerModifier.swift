@@ -28,8 +28,13 @@ struct NavigationBarFilterDrawerModifier: ViewModifier {
             content
         } else {
             if #available(iOS 26, *) {
+                // `safeAreaBar` floats above scroll content. Paging libraries
+                // intentionally draw through their vertical safe area, which
+                // caused this bar to cover the first row of posters. An inset
+                // keeps the filters below the navigation title and reserves
+                // their height before laying out the library.
                 content
-                    .safeAreaBar(edge: .top, spacing: 0) {
+                    .safeAreaInset(edge: .top, spacing: 0) {
                         drawer
                     }
                     .preference(key: IsSafeAreaBarApplied.self, value: true)

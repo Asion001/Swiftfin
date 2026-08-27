@@ -1,0 +1,579 @@
+//
+// Swiftfin is subject to the terms of the Mozilla Public
+// License, v2.0. If a copy of the MPL was not distributed with this
+// file, you can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
+//
+
+#if os(iOS)
+import Foundation
+@preconcurrency import Libmpv
+import QuartzCore
+
+enum MPVClientError: LocalizedError {
+    case api(operation: String, code: Int32)
+    case initialization
+
+    var errorDescription: String? {
+        switch self {
+        case let .api(operation, code):
+            let message = String(cString: mpv_error_string(code))
+            return "MPV \(operation) failed: \(message)"
+        case .initialization:
+            return "MPV could not create a playback context"
+        }
+    }
+}
+
+enum MPVPropertyValue: @unchecked Sendable, Equatable {
+    case bool(Bool)
+    case double(Double)
+    case integer(Int64)
+    case string(String)
+    case unavailable
+}
+
+struct MPVTrack: Sendable, Equatable, Identifiable {
+    enum Kind: String, Sendable {
+        case audio
+        case subtitle = "sub"
+        case video
+        case unknown
+    }
+
+    let id: Int64
+    let ffIndex: Int?
+    let kind: Kind
+    let title: String
+    let language: String?
+    let codec: String?
+    let isExternal: Bool
+    let isSelected: Bool
+}
+
+/// A serialized libmpv owner. Normal client calls and event draining share one
+/// queue; rendering is performed internally by MPV's MoltenVK video output.
+/// This avoids the callback/client-thread deadlocks documented by libmpv.
+final class MPVClientCore: @unchecked Sendable {
+
+    enum Event: @unchecked Sendable {
+        case endFile(error: String?)
+        case fileLoaded
+        case log(String)
+        case property(name: String, value: MPVPropertyValue)
+        case tracks([MPVTrack])
+    }
+
+    typealias EventHandler = @Sendable (Event) -> Void
+
+    private struct DesiredTrack {
+        let kind: MPVTrack.Kind
+        let ffIndex: Int?
+    }
+
+    private let configurationStore: MPVConfigurationStore
+    private let queue = DispatchQueue(
+        label: "org.jellyfin.swiftfin.mpv-client",
+        qos: .userInitiated
+    )
+
+    private var desiredTracks: [MPVTrack.Kind: DesiredTrack] = [:]
+    private var eventHandler: EventHandler?
+    private var handle: OpaquePointer?
+    private var isInitialized = false
+    private var layer: CAMetalLayer?
+    private var pendingURL: URL?
+    private var tracks: [MPVTrack] = []
+
+    init(configurationStore: MPVConfigurationStore = .shared) {
+        self.configurationStore = configurationStore
+    }
+
+    deinit {
+        shutdownSynchronously()
+    }
+
+    func setEventHandler(_ handler: EventHandler?) {
+        queue.async { [weak self] in
+            self?.eventHandler = handler
+        }
+    }
+
+    func attach(to layer: CAMetalLayer) {
+        queue.async { [weak self] in
+            self?.initializeIfNeeded(layer: layer)
+        }
+    }
+
+    func load(url: URL) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            pendingURL = url
+            loadPendingURLIfPossible()
+        }
+    }
+
+    func play() {
+        setFlag(name: "pause", value: false)
+    }
+
+    func pause() {
+        setFlag(name: "pause", value: true)
+    }
+
+    func stopPlayback() {
+        command(["stop"])
+    }
+
+    func seek(to seconds: Double) {
+        command(["seek", String(max(0, seconds)), "absolute+exact"])
+    }
+
+    func seek(by seconds: Double) {
+        command(["seek", String(seconds), "relative+exact"])
+    }
+
+    func setRate(_ rate: Double) {
+        setDouble(name: "speed", value: rate)
+    }
+
+    func setAspectFill(_ isFilled: Bool) {
+        setDouble(name: "panscan", value: isFilled ? 1 : 0)
+    }
+
+    func setAudioDelay(_ seconds: Double) {
+        setDouble(name: "audio-delay", value: seconds)
+    }
+
+    func setSubtitleDelay(_ seconds: Double) {
+        setDouble(name: "sub-delay", value: seconds)
+    }
+
+    func setOption(name: String, value: String) {
+        queue.async { [weak self] in
+            guard let self, let handle else { return }
+            reportIfFailed(
+                mpv_set_property_string(handle, name, value),
+                operation: "set \(name)"
+            )
+        }
+    }
+
+    /// Replaces the active user shader chain.
+    ///
+    /// Uses `change-list` rather than assigning `glsl-shaders` directly so that
+    /// paths never have to be escaped against MPV's list separator.
+    func setShaders(_ paths: [String]) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            performCommand(["change-list", "glsl-shaders", "clr", ""])
+
+            for path in paths {
+                performCommand(["change-list", "glsl-shaders", "append", path])
+            }
+        }
+    }
+
+    /// Asks MPV whether it knows an option by name.
+    ///
+    /// Swiftfin's patched libmpv adds options that stock builds do not have, so
+    /// features are probed rather than assumed from a version number.
+    func probeOption(named name: String, completion: @escaping @Sendable (Bool) -> Void) {
+        queue.async { [weak self] in
+            guard let self, let handle else {
+                completion(false)
+                return
+            }
+
+            completion(getString(handle: handle, name: "option-info/\(name)/name") != nil)
+        }
+    }
+
+    func selectTrack(kind: MPVTrack.Kind, ffIndex: Int?) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            desiredTracks[kind] = DesiredTrack(kind: kind, ffIndex: ffIndex)
+            applyDesiredTrack(kind: kind)
+        }
+    }
+
+    func addSubtitle(url: URL, title: String?) {
+        var arguments = ["sub-add", url.absoluteString, "auto"]
+        if let title, title.isNotEmpty {
+            arguments.append(title)
+        }
+        command(arguments)
+    }
+
+    func takeScreenshot(to url: URL, includeSubtitles: Bool = true) {
+        command([
+            "screenshot-to",
+            url.path,
+            includeSubtitles ? "subtitles" : "video",
+        ])
+    }
+
+    func shutdown() {
+        queue.async { [weak self] in
+            self?.destroyHandle()
+        }
+    }
+}
+
+private extension MPVClientCore {
+
+    static let observedProperties: [(name: String, format: mpv_format)] = [
+        ("time-pos", MPV_FORMAT_DOUBLE),
+        ("duration", MPV_FORMAT_DOUBLE),
+        ("pause", MPV_FORMAT_FLAG),
+        ("paused-for-cache", MPV_FORMAT_FLAG),
+        ("width", MPV_FORMAT_INT64),
+        ("height", MPV_FORMAT_INT64),
+        ("container-fps", MPV_FORMAT_DOUBLE),
+        ("estimated-vf-fps", MPV_FORMAT_DOUBLE),
+        ("display-fps", MPV_FORMAT_DOUBLE),
+        ("decoder-frame-drop-count", MPV_FORMAT_INT64),
+        ("frame-drop-count", MPV_FORMAT_INT64),
+        ("demuxer-cache-duration", MPV_FORMAT_DOUBLE),
+        ("cache-buffering-state", MPV_FORMAT_INT64),
+        ("video-codec", MPV_FORMAT_STRING),
+        ("video-format", MPV_FORMAT_STRING),
+        ("audio-codec-name", MPV_FORMAT_STRING),
+        ("hwdec-current", MPV_FORMAT_STRING),
+        ("video-params/primaries", MPV_FORMAT_STRING),
+        ("video-params/gamma", MPV_FORMAT_STRING),
+        ("video-params/sig-peak", MPV_FORMAT_DOUBLE),
+        ("track-list/count", MPV_FORMAT_INT64),
+    ]
+
+    func initializeIfNeeded(layer: CAMetalLayer) {
+        self.layer = layer
+        guard !isInitialized else { return }
+
+        do {
+            try configurationStore.prepare()
+        } catch {
+            emit(.log("Unable to prepare MPV configuration: \(error.localizedDescription)"))
+        }
+
+        guard let newHandle = mpv_create() else {
+            emit(.endFile(error: MPVClientError.initialization.localizedDescription))
+            return
+        }
+        handle = newHandle
+
+        do {
+            try setPreInitializationOptions(handle: newHandle, layer: layer)
+            try check(mpv_initialize(newHandle), operation: "initialize")
+        } catch {
+            emit(.endFile(error: error.localizedDescription))
+            destroyHandle()
+            return
+        }
+
+        isInitialized = true
+        mpv_set_wakeup_callback(
+            newHandle,
+            mpvSwiftfinWakeup,
+            Unmanaged.passUnretained(self).toOpaque()
+        )
+
+        for (index, property) in Self.observedProperties.enumerated() {
+            mpv_observe_property(
+                newHandle,
+                UInt64(index + 1),
+                property.name,
+                property.format
+            )
+        }
+
+        loadPendingURLIfPossible()
+    }
+
+    func setPreInitializationOptions(
+        handle: OpaquePointer,
+        layer: CAMetalLayer
+    ) throws {
+        var windowID = Int64(bitPattern: UInt64(UInt(bitPattern: Unmanaged.passUnretained(layer).toOpaque())))
+        try check(
+            mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &windowID),
+            operation: "attach Metal layer"
+        )
+        try setOption(handle: handle, name: "config", value: "yes")
+        try setOption(
+            handle: handle,
+            name: "config-dir",
+            value: configurationStore.directoryURL.path
+        )
+        try setOption(handle: handle, name: "vo", value: "gpu-next")
+        try setOption(handle: handle, name: "gpu-api", value: "vulkan")
+        try setOption(handle: handle, name: "gpu-context", value: "moltenvk")
+
+        /// Swiftfin's own playback settings. These are applied before
+        /// `mpv_initialize`, and `mpv.conf` is read during it, so anything a
+        /// user writes there still overrides all of this.
+        for (name, value) in MPVPlaybackOptions.current() {
+            try setOption(handle: handle, name: name, value: value)
+        }
+        try setOption(handle: handle, name: "terminal", value: "no")
+        try setOption(handle: handle, name: "input-default-bindings", value: "no")
+        try setOption(handle: handle, name: "osc", value: "no")
+        try setOption(handle: handle, name: "ytdl", value: "no")
+        try setOption(handle: handle, name: "idle", value: "yes")
+
+        #if DEBUG
+        try check(mpv_request_log_messages(handle, "info"), operation: "enable logging")
+        #else
+        try check(mpv_request_log_messages(handle, "warn"), operation: "enable logging")
+        #endif
+    }
+
+    func setOption(handle: OpaquePointer, name: String, value: String) throws {
+        try check(
+            mpv_set_option_string(handle, name, value),
+            operation: "configure \(name)"
+        )
+    }
+
+    func loadPendingURLIfPossible() {
+        guard isInitialized, let pendingURL else { return }
+        self.pendingURL = nil
+        performCommand(["loadfile", pendingURL.absoluteString, "replace"])
+    }
+
+    func command(_ arguments: [String]) {
+        queue.async { [weak self] in
+            self?.performCommand(arguments)
+        }
+    }
+
+    func performCommand(_ arguments: [String]) {
+        guard let handle, arguments.isNotEmpty else { return }
+
+        var cArguments: [UnsafePointer<CChar>?] = arguments.map { argument in
+            UnsafePointer(strdup(argument))
+        }
+        cArguments.append(nil)
+        defer {
+            for argument in cArguments.compactMap(\.self) {
+                free(UnsafeMutablePointer(mutating: argument))
+            }
+        }
+
+        reportIfFailed(
+            mpv_command(handle, &cArguments),
+            operation: arguments[0]
+        )
+    }
+
+    func setFlag(name: String, value: Bool) {
+        queue.async { [weak self] in
+            guard let self, let handle else { return }
+            var flag: Int32 = value ? 1 : 0
+            reportIfFailed(
+                mpv_set_property(handle, name, MPV_FORMAT_FLAG, &flag),
+                operation: "set \(name)"
+            )
+        }
+    }
+
+    func setDouble(name: String, value: Double) {
+        queue.async { [weak self] in
+            guard let self, let handle else { return }
+            var value = value
+            reportIfFailed(
+                mpv_set_property(handle, name, MPV_FORMAT_DOUBLE, &value),
+                operation: "set \(name)"
+            )
+        }
+    }
+
+    func applyDesiredTrack(kind: MPVTrack.Kind) {
+        guard let desired = desiredTracks[kind], let handle else { return }
+        let property = kind == .audio ? "aid" : "sid"
+
+        guard let ffIndex = desired.ffIndex, ffIndex >= 0 else {
+            reportIfFailed(
+                mpv_set_property_string(handle, property, "no"),
+                operation: "disable \(kind.rawValue) track"
+            )
+            return
+        }
+
+        guard let track = tracks.first(where: {
+            $0.kind == desired.kind && $0.ffIndex == ffIndex
+        }) ?? tracks.first(where: {
+            $0.kind == desired.kind && $0.id == Int64(ffIndex)
+        }) else { return }
+
+        reportIfFailed(
+            mpv_set_property_string(handle, property, String(track.id)),
+            operation: "select \(kind.rawValue) track"
+        )
+    }
+
+    func wakeup() {
+        queue.async { [weak self] in
+            self?.drainEvents()
+        }
+    }
+
+    func drainEvents() {
+        guard let handle else { return }
+
+        while let event = mpv_wait_event(handle, 0), event.pointee.event_id != MPV_EVENT_NONE {
+            switch event.pointee.event_id {
+            case MPV_EVENT_PROPERTY_CHANGE:
+                handlePropertyChange(event.pointee.data)
+            case MPV_EVENT_FILE_LOADED:
+                rebuildTracks()
+                emit(.fileLoaded)
+            case MPV_EVENT_END_FILE:
+                handleEndFile(event.pointee.data)
+            case MPV_EVENT_LOG_MESSAGE:
+                handleLogMessage(event.pointee.data)
+            default:
+                break
+            }
+        }
+    }
+
+    func handlePropertyChange(_ data: UnsafeMutableRawPointer?) {
+        guard let data else { return }
+        let property = data.assumingMemoryBound(to: mpv_event_property.self).pointee
+        guard let namePointer = property.name else { return }
+        let name = String(cString: namePointer)
+        let value: MPVPropertyValue
+
+        guard let propertyData = property.data else {
+            emit(.property(name: name, value: .unavailable))
+            return
+        }
+
+        switch property.format {
+        case MPV_FORMAT_FLAG:
+            value = .bool(propertyData.assumingMemoryBound(to: Int32.self).pointee != 0)
+        case MPV_FORMAT_DOUBLE:
+            value = .double(propertyData.assumingMemoryBound(to: Double.self).pointee)
+        case MPV_FORMAT_INT64:
+            value = .integer(propertyData.assumingMemoryBound(to: Int64.self).pointee)
+        case MPV_FORMAT_STRING:
+            let stringPointer = propertyData
+                .assumingMemoryBound(to: UnsafePointer<CChar>?.self)
+                .pointee
+            value = stringPointer.map { .string(String(cString: $0)) } ?? .unavailable
+        default:
+            value = .unavailable
+        }
+
+        emit(.property(name: name, value: value))
+
+        if name == "track-list/count" {
+            rebuildTracks()
+        }
+    }
+
+    func rebuildTracks() {
+        guard let handle else { return }
+        let count = Int(getInt64(handle: handle, name: "track-list/count") ?? 0)
+        tracks = (0 ..< count).compactMap { index in
+            guard let type = getString(handle: handle, name: "track-list/\(index)/type"),
+                  let id = getInt64(handle: handle, name: "track-list/\(index)/id")
+            else { return nil }
+
+            return MPVTrack(
+                id: id,
+                ffIndex: getInt64(handle: handle, name: "track-list/\(index)/ff-index").map(Int.init),
+                kind: MPVTrack.Kind(rawValue: type) ?? .unknown,
+                title: getString(handle: handle, name: "track-list/\(index)/title")
+                    ?? getString(handle: handle, name: "track-list/\(index)/lang")
+                    ?? "Track \(id)",
+                language: getString(handle: handle, name: "track-list/\(index)/lang"),
+                codec: getString(handle: handle, name: "track-list/\(index)/codec"),
+                isExternal: getFlag(handle: handle, name: "track-list/\(index)/external") ?? false,
+                isSelected: getFlag(handle: handle, name: "track-list/\(index)/selected") ?? false
+            )
+        }
+
+        applyDesiredTrack(kind: .audio)
+        applyDesiredTrack(kind: .subtitle)
+        emit(.tracks(tracks))
+    }
+
+    func handleEndFile(_ data: UnsafeMutableRawPointer?) {
+        guard let data else {
+            emit(.endFile(error: nil))
+            return
+        }
+        let endFile = data.assumingMemoryBound(to: mpv_event_end_file.self).pointee
+        if endFile.error < 0 {
+            emit(.endFile(error: String(cString: mpv_error_string(endFile.error))))
+        } else if endFile.reason == MPV_END_FILE_REASON_EOF {
+            emit(.endFile(error: nil))
+        }
+    }
+
+    func handleLogMessage(_ data: UnsafeMutableRawPointer?) {
+        guard let data else { return }
+        let message = data.assumingMemoryBound(to: mpv_event_log_message.self).pointee
+        guard let prefix = message.prefix, let level = message.level, let text = message.text else { return }
+        emit(.log("[\(String(cString: prefix))] \(String(cString: level)): \(String(cString: text))"))
+    }
+
+    func getString(handle: OpaquePointer, name: String) -> String? {
+        guard let value = mpv_get_property_string(handle, name) else { return nil }
+        defer { mpv_free(value) }
+        return String(cString: value)
+    }
+
+    func getInt64(handle: OpaquePointer, name: String) -> Int64? {
+        var value = Int64()
+        guard mpv_get_property(handle, name, MPV_FORMAT_INT64, &value) >= 0 else { return nil }
+        return value
+    }
+
+    func getFlag(handle: OpaquePointer, name: String) -> Bool? {
+        var value = Int32()
+        guard mpv_get_property(handle, name, MPV_FORMAT_FLAG, &value) >= 0 else { return nil }
+        return value != 0
+    }
+
+    func check(_ code: Int32, operation: String) throws {
+        guard code >= 0 else { throw MPVClientError.api(operation: operation, code: code) }
+    }
+
+    func reportIfFailed(_ code: Int32, operation: String) {
+        guard code < 0 else { return }
+        emit(.log(MPVClientError.api(operation: operation, code: code).localizedDescription))
+    }
+
+    func emit(_ event: Event) {
+        eventHandler?(event)
+    }
+
+    func destroyHandle() {
+        guard let handle else { return }
+        mpv_set_wakeup_callback(handle, nil, nil)
+        mpv_terminate_destroy(handle)
+        self.handle = nil
+        isInitialized = false
+        tracks = []
+        layer = nil
+    }
+
+    func shutdownSynchronously() {
+        queue.sync {
+            destroyHandle()
+        }
+    }
+}
+
+private func mpvSwiftfinWakeup(_ context: UnsafeMutableRawPointer?) {
+    guard let context else { return }
+    Unmanaged<MPVClientCore>
+        .fromOpaque(context)
+        .takeUnretainedValue()
+        .wakeup()
+}
+#endif

@@ -26,8 +26,8 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         private var selectedSubtitleStreamIndex: Int?
 
         #if os(iOS)
-        private var isEnhancedPlayer: Bool {
-            (manager.proxy as? AVMediaPlayerProxy)?.presentation == .enhanced
+        private var usesSubtitleSettingsSheet: Bool {
+            manager.proxy is MPVMediaPlayerProxy
         }
         #endif
 
@@ -81,7 +81,7 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
             if let playbackItem = manager.playbackItem {
                 Group {
                     #if os(iOS)
-                    if isEnhancedPlayer {
+                    if usesSubtitleSettingsSheet {
                         enhancedSubtitleButton
                     } else {
                         standardMenu(playbackItem: playbackItem)

@@ -123,7 +123,7 @@ struct SettingsView: View {
     private var videoPlayerSection: some View {
         Section(L10n.videoPlayer) {
             #if os(iOS)
-            Picker(L10n.videoPlayerType, selection: $videoPlayerType)
+            Picker(L10n.videoPlayerType, selection: $videoPlayerType, onlySupported: true)
             #else
             ListRowMenu(L10n.videoPlayerType, selection: $videoPlayerType)
             #endif
@@ -149,7 +149,7 @@ struct SettingsView: View {
             #if os(iOS)
             LabeledContent(
                 VideoEnhancementStrings.title,
-                value: VideoEnhancementStrings.enhancedPlayerDescription
+                value: VideoEnhancementStrings.mpvPlayerDescription
             )
             #endif
         }

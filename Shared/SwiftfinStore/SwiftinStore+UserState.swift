@@ -29,7 +29,7 @@ extension UserState {
 
     var accessToken: String {
         get {
-            guard let accessToken = Container.shared.keychainService().get("\(id)-accessToken") else {
+            guard let accessToken = storedAccessToken else {
                 assertionFailure("access token missing in keychain")
                 return ""
             }
@@ -37,8 +37,24 @@ extension UserState {
             return accessToken
         }
         nonmutating set {
-            Container.shared.keychainService().set(newValue, forKey: "\(id)-accessToken")
+            guard setAccessToken(newValue) else {
+                assertionFailure("unable to store access token")
+                return
+            }
         }
+    }
+
+    var hasAccessToken: Bool {
+        storedAccessToken?.isNotEmpty == true
+    }
+
+    @discardableResult
+    func setAccessToken(_ accessToken: String) -> Bool {
+        Container.shared.keychainService().set(accessToken, forKey: "\(id)-accessToken")
+    }
+
+    private var storedAccessToken: String? {
+        Container.shared.keychainService().get("\(id)-accessToken")
     }
 
     var data: UserDto {

@@ -1,15 +1,6 @@
 {
-  "originHash" : "3e15a4e971fcad437b8d0e6ebc974de04b89134ad85622cf12419a0abeb55a24",
+  "originHash" : "b433e23a68c83b4b489e00bb3017a25ea496888b7564ee5c7de62132449841b0",
   "pins" : [
-    {
-      "identity" : "anime4k-metal",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/cinemore/anime4k-metal.git",
-      "state" : {
-        "revision" : "60915937f6f391b30d50102533ce6fd98d009174",
-        "version" : "0.1.2"
-      }
-    },
     {
       "identity" : "blurhashkit",
       "kind" : "remoteSourceControl",
@@ -161,6 +152,15 @@
       "state" : {
         "revision" : "b3c237aff54b8307440157a2f5956bdea2e76791",
         "version" : "2.31.2"
+      }
+    },
+    {
+      "identity" : "mpvkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mpvkit/MPVKit.git",
+      "state" : {
+        "revision" : "288527dffbc6d3e63cce147fc7b520c64a791603",
+        "version" : "1.0.0"
       }
     },
     {

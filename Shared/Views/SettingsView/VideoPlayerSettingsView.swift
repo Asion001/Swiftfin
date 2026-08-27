@@ -26,10 +26,14 @@ struct VideoPlayerSettingsView: View {
     private var enhancementProvider
     @Default(.VideoPlayer.enhancementMode)
     private var enhancementMode
-    @Default(.VideoPlayer.enhancementMatchesSourceFrameRate)
-    private var enhancementMatchesSourceFrameRate
-    @Default(.VideoPlayer.enhancementPerformanceHUD)
-    private var enhancementPerformanceHUD
+    @Default(.VideoPlayer.mpvHardwareDecoding)
+    private var mpvHardwareDecoding
+    @Default(.VideoPlayer.mpvDeinterlace)
+    private var mpvDeinterlace
+    @Default(.VideoPlayer.mpvDeband)
+    private var mpvDeband
+    @Default(.VideoPlayer.mpvCacheMegabytes)
+    private var mpvCacheMegabytes
     #endif
 
     // MARK: - Button Defaults
@@ -132,8 +136,7 @@ struct VideoPlayerSettingsView: View {
     private var enhancementFooter: String {
         [
             VideoEnhancementStrings.energyWarning,
-            enhancementProvider == .anime4K ? VideoEnhancementStrings.anime4KWarning : nil,
-            VideoEnhancementStrings.frameRateExplanation,
+            enhancementProvider == .shader ? VideoEnhancementStrings.shaderWarning : nil,
         ]
             .compactMap(\.self)
             .joined(separator: "\n\n")
@@ -142,7 +145,7 @@ struct VideoPlayerSettingsView: View {
     @ViewBuilder
     private var enhancementSettings: some View {
         Section {
-            Picker(L10n.videoPlayerType, selection: $videoPlayerType)
+            Picker(L10n.videoPlayerType, selection: $videoPlayerType, onlySupported: true)
 
             Picker(VideoEnhancementStrings.upscaler, selection: $enhancementProvider) {
                 ForEach(VideoEnhancementProvider.supportedCases, id: \.rawValue) { provider in
@@ -150,24 +153,37 @@ struct VideoPlayerSettingsView: View {
                         .tag(provider)
                 }
             }
-            .disabled(videoPlayerType != .enhanced)
+            .disabled(videoPlayerType != .mpv)
 
             Picker(VideoEnhancementStrings.title, selection: $enhancementMode)
-                .disabled(videoPlayerType != .enhanced)
+                .disabled(videoPlayerType != .mpv)
 
-            Toggle(
-                VideoEnhancementStrings.matchSourceFrameRate,
-                isOn: $enhancementMatchesSourceFrameRate
-            )
-            .disabled(videoPlayerType != .enhanced)
-
-            Toggle(VideoEnhancementStrings.performance, isOn: $enhancementPerformanceHUD)
-                .disabled(videoPlayerType != .enhanced)
         } header: {
             Text(VideoEnhancementStrings.title)
         } footer: {
             Text(enhancementFooter)
         }
+
+        Section {
+            Toggle(MPVPlaybackStrings.hardwareDecoding, isOn: $mpvHardwareDecoding)
+            Toggle(MPVPlaybackStrings.deinterlace, isOn: $mpvDeinterlace)
+            Toggle(MPVPlaybackStrings.deband, isOn: $mpvDeband)
+
+            Picker(MPVPlaybackStrings.cache, selection: $mpvCacheMegabytes) {
+                ForEach([64, 128, 256, 512, 1024], id: \.self) { megabytes in
+                    Text(Int64(megabytes * 1_048_576).formatted(.byteCount(style: .memory)))
+                        .tag(megabytes)
+                }
+            }
+        } header: {
+            Text(MPVConfigurationStrings.title)
+        } footer: {
+            Text(MPVPlaybackStrings.settingsFooter)
+        }
+        .disabled(videoPlayerType != .mpv)
+
+        MPVConfigurationView(store: .shared)
+            .disabled(videoPlayerType != .mpv)
     }
     #endif
 
