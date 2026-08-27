@@ -22,6 +22,17 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "2026.8.27",
+          "buildVersion": "1787867360",
+          "marketingVersion": "Enhanced 2026.8.27 (1787867360)",
+          "date": "2026-08-27T21:49:20Z",
+          "localizedDescription": "Automated build from 291d73b. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.27-1787867360/Swiftfin-Enhanced.ipa",
+          "size": 195959131,
+          "sha256": "69a035334b870b20a01137c94bd64bf21afbd83a75658e8e2db499fc2bee4ed0",
+          "minOSVersion": "18.6"
+        },
+        {
           "version": "2026.8.26",
           "buildVersion": "1787773160",
           "marketingVersion": "Enhanced 2026.8.26 (1787773160)",
