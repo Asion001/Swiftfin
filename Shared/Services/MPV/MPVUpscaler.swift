@@ -45,7 +45,7 @@ enum MPVShaderPreset: String, CaseIterable {
     var displayTitle: String {
         switch self {
         case .builtIn:
-            String(localized: "upscaler.preset.built-in", defaultValue: "libplacebo")
+            String(enhancedLocalized: "upscaler.preset.built-in", defaultValue: "libplacebo")
         case .artCNNLight:
             "ArtCNN C4F16"
         case .artCNNHeavy:
@@ -81,7 +81,6 @@ enum MPVUpscaler {
     /// Options added by Swiftfin's libmpv patch. Absent from stock builds, which
     /// is how `MPVUpscalerController` detects the patch.
     static let metalFXOptionName = "metalfx"
-    static let metalFXSharpnessOptionName = "metalfx-sharpness"
 
     /// The MPV options that realize a given upscaler selection.
     struct Configuration: Equatable {
@@ -95,23 +94,7 @@ enum MPVUpscaler {
         /// Whether the patched MetalFX pass should run.
         var isMetalFXEnabled = false
 
-        /// MetalFX edge sharpening, `0...1`.
-        var metalFXSharpness: Double = 0
-
         static let disabled = Configuration(options: Self.scalerOptions(isEnhanced: false))
-    }
-
-    /// MetalFX sharpening per tier, matching the values the AVPlayer-backed
-    /// implementation used so the tiers keep looking the same.
-    static func metalFXSharpness(for level: VideoEnhancementLevel) -> Double {
-        switch level {
-        case .fast:
-            0.2
-        case .balanced:
-            0.4
-        case .quality:
-            0.6
-        }
     }
 
     static func configuration(
@@ -127,8 +110,7 @@ enum MPVUpscaler {
 
             return Configuration(
                 options: Configuration.scalerOptions(isEnhanced: false),
-                isMetalFXEnabled: true,
-                metalFXSharpness: metalFXSharpness(for: level)
+                isMetalFXEnabled: true
             )
         case .shader:
             let preset = MPVShaderPreset(level: level)

@@ -262,54 +262,54 @@ final class SleepTimerController: ObservableObject {
 }
 
 enum SleepTimerStrings {
-    static let title = String(localized: "sleep-timer.title", defaultValue: "Sleep timer")
-    static let custom = String(localized: "sleep-timer.custom", defaultValue: "Custom duration")
-    static let start = String(localized: "sleep-timer.start", defaultValue: "Start timer")
-    static let cancel = String(localized: "sleep-timer.cancel", defaultValue: "Cancel timer")
+    static let title = String(enhancedLocalized: "sleep-timer.title", defaultValue: "Sleep timer")
+    static let custom = String(enhancedLocalized: "sleep-timer.custom", defaultValue: "Custom duration")
+    static let start = String(enhancedLocalized: "sleep-timer.start", defaultValue: "Start timer")
+    static let cancel = String(enhancedLocalized: "sleep-timer.cancel", defaultValue: "Cancel timer")
     static let addFifteenMinutes = String(
-        localized: "sleep-timer.add-fifteen",
+        enhancedLocalized: "sleep-timer.add-fifteen",
         defaultValue: "Add 15 minutes"
     )
     static let paused = String(
-        localized: "sleep-timer.paused",
+        enhancedLocalized: "sleep-timer.paused",
         defaultValue: "Sleep timer finished. Playback paused."
     )
     static let finished = String(
-        localized: "sleep-timer.finished",
+        enhancedLocalized: "sleep-timer.finished",
         defaultValue: "Sleep timer finished."
     )
     static let finishEpisode = String(
-        localized: "sleep-timer.finish-episode",
+        enhancedLocalized: "sleep-timer.finish-episode",
         defaultValue: "End of this episode"
     )
     static let finishMovie = String(
-        localized: "sleep-timer.finish-movie",
+        enhancedLocalized: "sleep-timer.finish-movie",
         defaultValue: "End of this movie"
     )
     static let finishItem = String(
-        localized: "sleep-timer.finish-item",
+        enhancedLocalized: "sleep-timer.finish-item",
         defaultValue: "End of this item"
     )
     static let endOfItemExplanation = String(
-        localized: "sleep-timer.end-of-item-explanation",
+        enhancedLocalized: "sleep-timer.end-of-item-explanation",
         defaultValue: "Playback stops when this finishes instead of continuing to the next one."
     )
 
     static func endsIn(_ value: String) -> String {
-        String(localized: "sleep-timer.ends-in", defaultValue: "Ends in \(value)")
+        String(enhancedLocalized: "sleep-timer.ends-in", defaultValue: "Ends in \(value)")
     }
 
     static let energyExplanation = String(
-        localized: "sleep-timer.background-explanation",
+        enhancedLocalized: "sleep-timer.background-explanation",
         defaultValue: "The timer uses the actual clock, continues during background audio and buffering, and pauses playback when it finishes."
     )
 
     static func minutes(_ value: Int) -> String {
-        String(localized: "sleep-timer.minutes", defaultValue: "\(value) minutes")
+        String(enhancedLocalized: "sleep-timer.minutes", defaultValue: "\(value) minutes")
     }
 
     static func remaining(_ value: String) -> String {
-        String(localized: "sleep-timer.remaining", defaultValue: "Pauses in \(value)")
+        String(enhancedLocalized: "sleep-timer.remaining", defaultValue: "Pauses in \(value)")
     }
 }
 #endif

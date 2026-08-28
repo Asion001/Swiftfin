@@ -10,6 +10,7 @@ import Foundation
 
 // Path to the English localization file
 let localizationFile = "./Translations/en.lproj/Localizable.strings"
+let enhancedLocalizationFile = "./Translations/en.lproj/SwiftfinEnhanced.strings"
 
 // Directories to scan for Swift files
 let directoriesToScan = ["./Shared", "./Swiftfin", "./Swiftfin tvOS"]
@@ -24,15 +25,27 @@ let localizationRegex = #/^\"(?<key>[^\"]+)\"\s*=\s*\"(?<value>[^\"]+)\";$/#
 // Matches usage like L10n.key in Swift files
 let usageRegex = #/L10n\.(?<key>[a-zA-Z0-9_]+)/#
 
+// Matches usage like String(enhancedLocalized: "key", ...) in Swift files
+let enhancedUsageRegex = #/String\(\s*enhancedLocalized:\s*"(?<key>[^"]+)"/#
+
 // Attempt to load the localization file's content
 guard let localizationContent = try? String(contentsOfFile: localizationFile, encoding: .utf16) else {
     print("Unable to read localization file at \(localizationFile)")
     exit(1)
 }
 
+guard let enhancedLocalizationContent = try? String(
+    contentsOfFile: enhancedLocalizationFile,
+    encoding: .utf8
+) else {
+    print("Unable to read localization file at \(enhancedLocalizationFile)")
+    exit(1)
+}
+
 // Split the file into lines and initialize a dictionary for localization entries
 let localizationLines = localizationContent.components(separatedBy: .newlines)
 var localizationEntries = [String: String]()
+var enhancedLocalizationEntries = [String: String]()
 
 // Parse each line to extract key-value pairs
 for line in localizationLines {
@@ -51,8 +64,23 @@ for line in localizationLines {
     }
 }
 
+for line in enhancedLocalizationContent.components(separatedBy: .newlines) {
+    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if trimmed.isEmpty || trimmed.hasPrefix("//") {
+        continue
+    }
+
+    if let match = line.firstMatch(of: localizationRegex) {
+        let key = String(match.output.key)
+        let value = String(match.output.value)
+        enhancedLocalizationEntries[key] = value
+    }
+}
+
 // Set to store all keys found in the codebase
 var usedKeys = Set<String>()
+var enhancedUsedKeys = Set<String>()
 
 // Function to scan a directory recursively for Swift files
 func scanDirectory(_ path: String) {
@@ -78,6 +106,10 @@ func scanDirectory(_ path: String) {
                         usedKeys.insert(key)
                     }
                 }
+
+                for match in fileContent.matches(of: enhancedUsageRegex) {
+                    enhancedUsedKeys.insert(String(match.output.key))
+                }
             }
         }
     }
@@ -98,7 +130,7 @@ let unusedKeys = localizationEntries.keys
     .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
 
 if unusedKeys.isEmpty {
-    print("No unused localization strings found.")
+    print("No unused Localizable.strings entries found.")
 } else {
     print("Found \(unusedKeys.count) unused localization string(s):\n")
 
@@ -123,6 +155,60 @@ if unusedKeys.isEmpty {
             print("\nLocalization file updated. Removed \(unusedKeys.count) unused keys.")
         } catch {
             print("\nError: Failed to write updated localization file.")
+            exit(1)
+        }
+    } else {
+        print("\nRun 'swift Scripts/Translations/FindUnusedStrings.swift --purge' to remove them.")
+        exit(1)
+    }
+}
+
+let missingEnhancedKeys = enhancedUsedKeys
+    .filter { enhancedLocalizationEntries[$0] == nil }
+    .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+
+if !missingEnhancedKeys.isEmpty {
+    print("Found \(missingEnhancedKeys.count) enhanced localization key(s) missing from the table:\n")
+
+    for key in missingEnhancedKeys {
+        print("  - \(key)")
+    }
+
+    exit(1)
+}
+
+let unusedEnhancedKeys = enhancedLocalizationEntries.keys
+    .filter { !enhancedUsedKeys.contains($0) }
+    .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+
+if unusedEnhancedKeys.isEmpty {
+    print("No unused SwiftfinEnhanced.strings entries found.")
+} else {
+    print("Found \(unusedEnhancedKeys.count) unused enhanced localization string(s):\n")
+
+    for key in unusedEnhancedKeys {
+        print("  - \(key)")
+    }
+
+    if shouldPurge {
+        unusedEnhancedKeys.forEach { enhancedLocalizationEntries.removeValue(forKey: $0) }
+
+        let sortedKeys = enhancedLocalizationEntries.keys.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
+        let updatedContent = sortedKeys
+            .map { "\"\($0)\" = \"\(enhancedLocalizationEntries[$0]!)\";" }
+            .joined(separator: "\n")
+
+        do {
+            try updatedContent.write(
+                toFile: enhancedLocalizationFile,
+                atomically: true,
+                encoding: .utf8
+            )
+            print("\nEnhanced localization file updated. Removed \(unusedEnhancedKeys.count) unused keys.")
+        } catch {
+            print("\nError: Failed to write updated enhanced localization file.")
             exit(1)
         }
     } else {

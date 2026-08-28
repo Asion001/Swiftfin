@@ -72,7 +72,6 @@ pass and the upscaler.
 | Option | Default | Meaning |
 |---|---|---|
 | `--metalfx` | `no` | Enable the MetalFX pass |
-| `--metalfx-sharpness` | `0` | Reserved for sharpening control, `0`–`1` |
 | `--metalfx-max-source-height` | `0` | Skip MetalFX above this source height; `0` means no limit |
 
 Swiftfin never assumes these exist: `MPVUpscalerController` probes `option-info/metalfx/name` and

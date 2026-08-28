@@ -29,6 +29,7 @@ final class MPVPlaybackDiagnostics: ObservableObject {
     private(set) var latestScreenshotURL: URL?
 
     func record(property name: String, value: MPVPropertyValue) {
+        guard properties[name] != value else { return }
         properties[name] = value
     }
 
@@ -193,10 +194,10 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         client.setOption(name: "sub-ass-override", value: "force")
     }
 
-    func takeScreenshot(includeSubtitles: Bool = true) throws -> URL {
+    func takeScreenshot(includeSubtitles: Bool = true) async throws -> URL {
         try configurationStore.prepare()
         let url = configurationStore.screenshotURL()
-        client.takeScreenshot(to: url, includeSubtitles: includeSubtitles)
+        try await client.takeScreenshot(to: url, includeSubtitles: includeSubtitles)
         diagnostics.record(screenshot: url)
         return url
     }
@@ -234,6 +235,13 @@ private extension MPVMediaPlayerProxy {
         isBuffering.value = true
         diagnostics.record(log: "Loading \(item.url.lastPathComponent)")
 
+        // A stopped MPV context is intentionally destroyed. Re-attaching here
+        // makes a proxy that receives another item usable instead of leaving a
+        // queued URL with no context and presenting a black surface.
+        if let metalLayer {
+            client.attach(to: metalLayer)
+        }
+
         let audioIndex = item.indexMap.playerIndex(for: item.selectedAudioStreamIndex)
         let subtitleIndex = item.indexMap.playerIndex(for: item.selectedSubtitleStreamIndex)
         client.selectTrack(kind: .audio, ffIndex: audioIndex)
@@ -256,7 +264,12 @@ private extension MPVMediaPlayerProxy {
             diagnostics.record(log: message)
             manager?.logger.trace("MPV: \(message)")
         case let .property(name, value):
-            diagnostics.record(property: name, value: value)
+            // `time-pos` changes continuously and is already published by the
+            // media manager. Keeping a second copy in an @Published dictionary
+            // rebuilt the statistics view for every playback tick.
+            if name != "time-pos" {
+                diagnostics.record(property: name, value: value)
+            }
             handleProperty(name: name, value: value)
         case let .tracks(tracks):
             diagnostics.record(tracks: tracks)

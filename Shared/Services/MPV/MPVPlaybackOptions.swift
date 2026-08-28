@@ -13,12 +13,12 @@ import Foundation
 // swiftlint:disable hard_coded_display_string
 
 enum MPVPlaybackStrings {
-    static let hardwareDecoding = String(localized: "mpv.playback.hwdec", defaultValue: "Hardware decoding")
-    static let deinterlace = String(localized: "mpv.playback.deinterlace", defaultValue: "Deinterlace")
-    static let deband = String(localized: "mpv.playback.deband", defaultValue: "Debanding")
-    static let cache = String(localized: "mpv.playback.cache", defaultValue: "Cache")
+    static let hardwareDecoding = String(enhancedLocalized: "mpv.playback.hwdec", defaultValue: "Hardware decoding")
+    static let deinterlace = String(enhancedLocalized: "mpv.playback.deinterlace", defaultValue: "Deinterlace")
+    static let deband = String(enhancedLocalized: "mpv.playback.deband", defaultValue: "Debanding")
+    static let cache = String(enhancedLocalized: "mpv.playback.cache", defaultValue: "Cache")
     static let settingsFooter = String(
-        localized: "mpv.playback.footer",
+        enhancedLocalized: "mpv.playback.footer",
         defaultValue: "Hardware decoding uses VideoToolbox and falls back to software for formats it cannot handle. Debanding smooths gradients at some GPU cost. These apply to the next video."
     )
 }

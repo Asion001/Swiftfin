@@ -52,7 +52,7 @@ enum VideoEnhancementProvider: String, CaseIterable, Displayable, Storable {
         case .metalFX:
             "MetalFX"
         case .shader:
-            String(localized: "enhancement.provider.shader", defaultValue: "GPU shader")
+            String(enhancedLocalized: "enhancement.provider.shader", defaultValue: "GPU shader")
         }
     }
 }
@@ -67,15 +67,15 @@ enum VideoEnhancementMode: String, CaseIterable, Displayable, Storable {
     var displayTitle: String {
         switch self {
         case .off:
-            String(localized: "enhancement.mode.off", defaultValue: "Off")
+            String(enhancedLocalized: "enhancement.mode.off", defaultValue: "Off")
         case .auto:
-            String(localized: "enhancement.mode.auto", defaultValue: "Auto")
+            String(enhancedLocalized: "enhancement.mode.auto", defaultValue: "Auto")
         case .fast:
-            String(localized: "enhancement.mode.fast", defaultValue: "Fast")
+            String(enhancedLocalized: "enhancement.mode.fast", defaultValue: "Fast")
         case .balanced:
-            String(localized: "enhancement.mode.balanced", defaultValue: "Balanced")
+            String(enhancedLocalized: "enhancement.mode.balanced", defaultValue: "Balanced")
         case .quality:
-            String(localized: "enhancement.mode.quality", defaultValue: "Quality")
+            String(enhancedLocalized: "enhancement.mode.quality", defaultValue: "Quality")
         }
     }
 
@@ -139,60 +139,60 @@ enum VideoEnhancementBypassReason: Equatable, Sendable {
     var displayTitle: String {
         switch self {
         case .criticalThermalState:
-            String(localized: "enhancement.bypass.thermal", defaultValue: "Paused while the device cools down")
+            String(enhancedLocalized: "enhancement.bypass.thermal", defaultValue: "Paused while the device cools down")
         case .externalPlayback:
-            String(localized: "enhancement.bypass.external", defaultValue: "Unavailable during AirPlay or external playback")
+            String(enhancedLocalized: "enhancement.bypass.external", defaultValue: "Unavailable during AirPlay or external playback")
         case .highDynamicRange:
-            String(localized: "enhancement.bypass.hdr", defaultValue: "HDR video uses the original picture")
+            String(enhancedLocalized: "enhancement.bypass.hdr", defaultValue: "HDR video uses the original picture")
         case .liveStream:
-            String(localized: "enhancement.bypass.live", defaultValue: "Unavailable for live video")
+            String(enhancedLocalized: "enhancement.bypass.live", defaultValue: "Unavailable for live video")
         case .lowMemory:
-            String(localized: "enhancement.bypass.memory", defaultValue: "Paused because memory is low")
+            String(enhancedLocalized: "enhancement.bypass.memory", defaultValue: "Paused because memory is low")
         case .metalUnavailable:
-            String(localized: "enhancement.bypass.metal", defaultValue: "Metal enhancement is unavailable")
+            String(enhancedLocalized: "enhancement.bypass.metal", defaultValue: "Metal enhancement is unavailable")
         case .modeOff:
-            String(localized: "enhancement.bypass.off", defaultValue: "Enhancement is off")
+            String(enhancedLocalized: "enhancement.bypass.off", defaultValue: "Enhancement is off")
         case .pictureInPicture:
-            String(localized: "enhancement.bypass.pip", defaultValue: "Unavailable during Picture in Picture")
+            String(enhancedLocalized: "enhancement.bypass.pip", defaultValue: "Unavailable during Picture in Picture")
         case .processingFailed:
-            String(localized: "enhancement.bypass.failed", defaultValue: "Using the original picture after an enhancement error")
+            String(enhancedLocalized: "enhancement.bypass.failed", defaultValue: "Using the original picture after an enhancement error")
         case .sourceAtTargetSize:
-            String(localized: "enhancement.bypass.target", defaultValue: "The source already matches the display size")
+            String(enhancedLocalized: "enhancement.bypass.target", defaultValue: "The source already matches the display size")
         case .sourceTooLarge:
-            String(localized: "enhancement.bypass.large", defaultValue: "Enhancement is limited to 1080p sources")
+            String(enhancedLocalized: "enhancement.bypass.large", defaultValue: "Enhancement is limited to 1080p sources")
         case .unsupportedPixelFormat:
-            String(localized: "enhancement.bypass.format", defaultValue: "The video pixel format is unsupported")
+            String(enhancedLocalized: "enhancement.bypass.format", defaultValue: "The video pixel format is unsupported")
         }
     }
 }
 
 enum VideoEnhancementStrings {
-    static let title = String(localized: "enhancement.title", defaultValue: "Upscaling")
-    static let upscaler = String(localized: "enhancement.upscaler", defaultValue: "Upscaler")
-    static let active = String(localized: "enhancement.active", defaultValue: "Active")
+    static let title = String(enhancedLocalized: "enhancement.title", defaultValue: "Upscaling")
+    static let upscaler = String(enhancedLocalized: "enhancement.upscaler", defaultValue: "Upscaler")
+    static let active = String(enhancedLocalized: "enhancement.active", defaultValue: "Active")
 
     static func missingShaders(_ names: String) -> String {
         String(
-            localized: "enhancement.missing-shaders",
+            enhancedLocalized: "enhancement.missing-shaders",
             defaultValue: "These shader files are missing from this build: \(names)"
         )
     }
 
     static let shaderWarning = String(
-        localized: "enhancement.shader-warning",
+        enhancedLocalized: "enhancement.shader-warning",
         defaultValue: "Shader upscaling runs a neural network on every frame and can run hotter or drop frames on higher tiers."
     )
     static let metalFXUnavailable = String(
-        localized: "enhancement.metalfx-unavailable",
+        enhancedLocalized: "enhancement.metalfx-unavailable",
         defaultValue: "MetalFX needs Swiftfin's enhanced MPV build. This build will use the original picture instead."
     )
-    static let performance = String(localized: "enhancement.performance", defaultValue: "Performance monitor")
+    static let performance = String(enhancedLocalized: "enhancement.performance", defaultValue: "Performance monitor")
     static let energyWarning = String(
-        localized: "enhancement.energy-warning",
+        enhancedLocalized: "enhancement.energy-warning",
         defaultValue: "Real-time upscaling uses the GPU and may increase battery use and device temperature."
     )
     static let mpvPlayerDescription = String(
-        localized: "enhancement.player-description",
+        enhancedLocalized: "enhancement.player-description",
         defaultValue: "Plays nearly any container and codec with MPV, using VideoToolbox hardware decoding and libplacebo rendering. Upscaling, tone mapping, and subtitle rendering all happen on device."
     )
 }

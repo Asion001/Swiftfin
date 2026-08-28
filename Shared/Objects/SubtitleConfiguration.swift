@@ -18,13 +18,13 @@ enum SubtitlePosition: String, CaseIterable, Displayable, Storable {
     var displayTitle: String {
         switch self {
         case .automatic:
-            String(localized: "subtitle.position.automatic", defaultValue: "Automatic")
+            String(enhancedLocalized: "subtitle.position.automatic", defaultValue: "Automatic")
         case .insideVideo:
-            String(localized: "subtitle.position.video", defaultValue: "Inside video")
+            String(enhancedLocalized: "subtitle.position.video", defaultValue: "Inside video")
         case .lowerBlackBar:
-            String(localized: "subtitle.position.black-bar", defaultValue: "Bottom black bar")
+            String(enhancedLocalized: "subtitle.position.black-bar", defaultValue: "Bottom black bar")
         case .screenBottom:
-            String(localized: "subtitle.position.screen", defaultValue: "Bottom of screen")
+            String(enhancedLocalized: "subtitle.position.screen", defaultValue: "Bottom of screen")
         }
     }
 }
