@@ -267,6 +267,9 @@ private extension MPVClientCore {
             try setPreInitializationOptions(handle: newHandle, layer: layer)
             try check(mpv_initialize(newHandle), operation: "initialize")
         } catch {
+            /// Drained before the handle goes away so that whatever MPV logged
+            /// on its way to failing is reported alongside the failure itself.
+            drainEvents()
             emit(.endFile(error: error.localizedDescription))
             destroyHandle()
             return
@@ -295,38 +298,32 @@ private extension MPVClientCore {
         handle: OpaquePointer,
         layer: CAMetalLayer
     ) throws {
-        var windowID = Int64(bitPattern: UInt64(UInt(bitPattern: Unmanaged.passUnretained(layer).toOpaque())))
-        try check(
-            mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &windowID),
-            operation: "attach Metal layer"
-        )
-        try setOption(handle: handle, name: "config", value: "yes")
-        try setOption(
-            handle: handle,
-            name: "config-dir",
-            value: configurationStore.directoryURL.path
-        )
-        try setOption(handle: handle, name: "vo", value: "gpu-next")
-        try setOption(handle: handle, name: "gpu-api", value: "vulkan")
-        try setOption(handle: handle, name: "gpu-context", value: "moltenvk")
-
-        /// Swiftfin's own playback settings. These are applied before
-        /// `mpv_initialize`, and `mpv.conf` is read during it, so anything a
-        /// user writes there still overrides all of this.
-        for (name, value) in MPVPlaybackOptions.current() {
-            try setOption(handle: handle, name: name, value: value)
-        }
-        try setOption(handle: handle, name: "terminal", value: "no")
-        try setOption(handle: handle, name: "input-default-bindings", value: "no")
-        try setOption(handle: handle, name: "osc", value: "no")
-        try setOption(handle: handle, name: "ytdl", value: "no")
-        try setOption(handle: handle, name: "idle", value: "yes")
-
+        /// Requested first so that everything below reports through MPV's own
+        /// log, including whatever it says while refusing to start.
         #if DEBUG
         try check(mpv_request_log_messages(handle, "info"), operation: "enable logging")
         #else
         try check(mpv_request_log_messages(handle, "warn"), operation: "enable logging")
         #endif
+
+        var windowID = Int64(bitPattern: UInt64(UInt(bitPattern: Unmanaged.passUnretained(layer).toOpaque())))
+        try check(
+            mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &windowID),
+            operation: "attach Metal layer"
+        )
+
+        for (name, value) in MPVInitialOptions.required(
+            configurationDirectory: configurationStore.directoryURL.path
+        ) {
+            try setOption(handle: handle, name: name, value: value)
+        }
+
+        /// Swiftfin's own playback settings. These are applied before
+        /// `mpv_initialize`, and `mpv.conf` is read during it, so anything a
+        /// user writes there still overrides all of this.
+        for (name, value) in MPVInitialOptions.optional + MPVPlaybackOptions.current() {
+            setOptionIfSupported(handle: handle, name: name, value: value)
+        }
     }
 
     func setOption(handle: OpaquePointer, name: String, value: String) throws {
@@ -334,6 +331,20 @@ private extension MPVClientCore {
             mpv_set_option_string(handle, name, value),
             operation: "configure \(name)"
         )
+    }
+
+    /// Applies an option Swiftfin can run without, keeping a build that does
+    /// not have it playable.
+    ///
+    /// libmpv rejects an option it was not built with instead of ignoring it,
+    /// and this runs before `mpv_initialize` — so treating every rejection as
+    /// fatal meant one absent option aborted the whole context and no video
+    /// could open at all.
+    func setOptionIfSupported(handle: OpaquePointer, name: String, value: String) {
+        let status = mpv_set_option_string(handle, name, value)
+        guard status < 0 else { return }
+
+        emit(.log("MPV does not support option \(name): \(String(cString: mpv_error_string(status)))"))
     }
 
     func loadPendingURLIfPossible() {

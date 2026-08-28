@@ -97,6 +97,33 @@ final class MPVTests: XCTestCase {
         #endif
     }
 
+    // MARK: - Initial options
+
+    /// MPV defines `osc` and `ytdl` only when built with Lua, and MPVKit
+    /// builds libmpv with `lua=disabled` for every platform this player ships
+    /// on. Requiring them aborted the context before `mpv_initialize`, so no
+    /// video opened at all and MPV never logged why.
+    func testLuaOnlyOptionsAreNotRequired() {
+        let required = MPVInitialOptions.required(configurationDirectory: "/config").map(\.name)
+        let optional = MPVInitialOptions.optional.map(\.name)
+
+        for name in ["osc", "ytdl"] {
+            XCTAssertFalse(required.contains(name), "\(name) does not exist without Lua and cannot be required")
+            XCTAssertTrue(optional.contains(name), "\(name) should still be set where it exists")
+        }
+    }
+
+    func testRequiredOptionsSelectTheMetalPresentationPath() {
+        let required = MPVInitialOptions.required(configurationDirectory: "/config")
+
+        /// MPV renders into the `CAMetalLayer` given as `wid`, which nothing
+        /// but `gpu-next` over MoltenVK can do.
+        XCTAssertEqual(required.first { $0.name == "vo" }?.value, "gpu-next")
+        XCTAssertEqual(required.first { $0.name == "gpu-api" }?.value, "vulkan")
+        XCTAssertEqual(required.first { $0.name == "gpu-context" }?.value, "moltenvk")
+        XCTAssertEqual(required.first { $0.name == "config-dir" }?.value, "/config")
+    }
+
     // MARK: - Upscaler
 
     func testUpscalerFallsBackWhenMetalFXIsUnavailable() {

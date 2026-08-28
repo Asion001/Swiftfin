@@ -26,6 +26,12 @@ Swiftfin applies its own options before `mpv_initialize`. MPV reads `mpv.conf` *
 so anything a user writes there overrides Swiftfin's settings. That is deliberate: Swiftfin's
 settings are defaults, and the config file is the power-user escape hatch.
 
+Those options are split in `MPVInitialOptions` by whether playback can proceed without them. MPV
+only defines an option when the feature behind it was compiled in and rejects every other name
+outright, so a build that lacks one would otherwise fail the whole context: `osc` and `ytdl` exist
+only with Lua, which MPVKit disables everywhere this player ships. Anything not needed to present
+video is applied best-effort and a rejection is logged, not fatal.
+
 ## Upscaling
 
 Two providers, both applied as MPV options — no frames pass through Swiftfin:
