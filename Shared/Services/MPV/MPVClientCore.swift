@@ -92,9 +92,12 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
 
     private var desiredTracks: [MPVTrack.Kind: DesiredTrack] = [:]
     private var eventHandler: EventHandler?
+    private var isResynchronizingLayerSize = false
+    private var needsAnotherLayerSizeResynchronization = false
     private var handle: OpaquePointer?
     private var isInitialized = false
     private var layer: CAMetalLayer?
+    private var pendingStartSeconds: Double = 0
     private var pendingURL: URL?
     private var tracks: [MPVTrack] = []
 
@@ -118,10 +121,17 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         }
     }
 
-    func load(url: URL) {
+    /// Opens a file, optionally beginning at `startSeconds`.
+    ///
+    /// The position is handed to MPV as the `start` option rather than seeked to
+    /// once the file is loaded: `loadfile` begins playing immediately, so a seek
+    /// issued from the `fileLoaded` event always shows a second or so of the
+    /// opening frames before the picture jumps to where the user left off.
+    func load(url: URL, startSeconds: Double = 0) {
         queue.async { [weak self] in
             guard let self else { return }
             pendingURL = url
+            pendingStartSeconds = startSeconds
             loadPendingURLIfPossible()
         }
     }
@@ -224,6 +234,54 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
             url.path,
             includeSubtitles ? "subtitles" : "video",
         ])
+    }
+
+    /// Tells MPV that the layer it renders into changed size.
+    ///
+    /// The `moltenvk` GPU context reads `CAMetalLayer.drawableSize` only from its
+    /// `reconfig`, and its `control` answers `VO_NOTIMPL` to everything, so in
+    /// this build nothing turns a layer resize into a `VO_EVENT_RESIZE` — the
+    /// `android-surface-size` property that drives `VOCTRL_EXTERNAL_RESIZE`
+    /// elsewhere is compiled out on Apple platforms. Left alone, `vo->dwidth` and
+    /// `vo->dheight` keep the size the file was opened at while libplacebo
+    /// rebuilds the swapchain at the new one, and MPV goes on drawing the picture
+    /// into a rectangle that no longer lands on the layer. Shrinking the player —
+    /// which is what presenting a supplement does — leaves mostly, or entirely,
+    /// black.
+    ///
+    /// Changing an option in MPV's video-position group runs the VO's `resize`,
+    /// and `resize` asks libplacebo for the swapchain's real extent, which is the
+    /// layer's. It takes two changes: the first corrects `dwidth`/`dheight` after
+    /// that pass has already computed its source and destination rectangles, the
+    /// second recomputes them from the corrected size. `video-align-y` is the
+    /// option used because a ten-thousandth of the letterbox slack rounds away to
+    /// nothing on screen, and it is put back immediately.
+    func synchronizeWithLayerSize() {
+        queue.async { [weak self] in
+            guard let self, handle != nil else { return }
+
+            guard !isResynchronizingLayerSize else {
+                needsAnotherLayerSizeResynchronization = true
+                return
+            }
+
+            isResynchronizingLayerSize = true
+            setVideoAlignY(Self.layerSizeProbeAlignment)
+
+            /// Deferred rather than issued back to back: MPV coalesces option
+            /// changes that land before its VO thread next runs, and a single
+            /// coalesced change only gets as far as fixing the size.
+            queue.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self else { return }
+                setVideoAlignY("0")
+                isResynchronizingLayerSize = false
+
+                if needsAnotherLayerSizeResynchronization {
+                    needsAnotherLayerSizeResynchronization = false
+                    synchronizeWithLayerSize()
+                }
+            }
+        }
     }
 
     func shutdown() {
@@ -359,9 +417,36 @@ private extension MPVClientCore {
         emit(.log("MPV does not support option \(name): \(String(cString: mpv_error_string(status)))"))
     }
 
+    /// A sub-pixel nudge: `video-align-y` is a fraction of the letterbox slack,
+    /// so a ten-thousandth of it never survives rounding to a whole pixel.
+    static let layerSizeProbeAlignment = "0.0001"
+
+    func setVideoAlignY(_ value: String) {
+        guard let handle else { return }
+        reportIfFailed(
+            mpv_set_property_string(handle, "video-align-y", value),
+            operation: "resynchronize video output"
+        )
+    }
+
     func loadPendingURLIfPossible() {
         guard isInitialized, let pendingURL else { return }
         self.pendingURL = nil
+
+        /// Always written, so that the position asked for by one item cannot
+        /// carry over into the next one loaded into the same context.
+        if let handle {
+            reportIfFailed(
+                mpv_set_property_string(
+                    handle,
+                    "start",
+                    pendingStartSeconds > 0 ? String(pendingStartSeconds) : "none"
+                ),
+                operation: "set start position"
+            )
+        }
+        pendingStartSeconds = 0
+
         performCommand(["loadfile", pendingURL.absoluteString, "replace"])
     }
 

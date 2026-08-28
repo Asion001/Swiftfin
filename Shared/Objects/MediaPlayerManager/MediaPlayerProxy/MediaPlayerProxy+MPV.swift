@@ -190,7 +190,15 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         )
         client.setOption(name: "sub-color", value: configuration.color.hexString)
         client.setOption(name: "sub-pos", value: String(position))
-        client.setOption(name: "sub-ass-override", value: "force")
+
+        /// MPV always applies the `sub-*` options to the formats it converts to
+        /// ASS itself — SubRip, WebVTT and the rest — so the font, size and
+        /// colour chosen here still reach them. `force` additionally replaces the
+        /// fonts, colours, borders and positioning that an ASS or SSA script
+        /// authored for itself, which is exactly what those subtitles carry
+        /// signs, karaoke and typesetting in. `scale`, MPV's own default, keeps
+        /// that intact while still honouring the position set above.
+        client.setOption(name: "sub-ass-override", value: "scale")
     }
 
     func takeScreenshot(includeSubtitles: Bool = true) throws -> URL {
@@ -221,6 +229,12 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         updateDynamicRange()
     }
 
+    /// See `MPVClientCore.synchronizeWithLayerSize()`: MPV cannot notice that the
+    /// layer it draws into was resized, so the view that resized it has to say so.
+    func layerDidChangeSize() {
+        client.synchronizeWithLayerSize()
+    }
+
     @ViewBuilder
     var videoPlayerBody: some View {
         MPVPlayerSurface(proxy: self)
@@ -238,7 +252,19 @@ private extension MPVMediaPlayerProxy {
         let subtitleIndex = item.indexMap.playerIndex(for: item.selectedSubtitleStreamIndex)
         client.selectTrack(kind: .audio, ffIndex: audioIndex)
         client.selectTrack(kind: .subtitle, ffIndex: subtitleIndex)
-        client.load(url: item.url)
+        client.load(url: item.url, startSeconds: startSeconds(for: item).seconds)
+    }
+
+    /// A live stream has no meaningful resume position, and asking for one only
+    /// delays the first frame.
+    func startSeconds(for item: MediaPlayerItem) -> Duration {
+        guard !item.baseItem.isLiveStream else { return .zero }
+
+        return max(
+            .zero,
+            (item.baseItem.startSeconds ?? .zero)
+                - Duration.seconds(Defaults[.VideoPlayer.resumeOffset])
+        )
     }
 
     func handle(event: MPVClientCore.Event) {
@@ -273,14 +299,6 @@ private extension MPVMediaPlayerProxy {
             client.addSubtitle(url: url, title: subtitle.displayTitle)
         }
 
-        let startSeconds = max(
-            .zero,
-            (playbackItem.baseItem.startSeconds ?? .zero)
-                - Duration.seconds(Defaults[.VideoPlayer.resumeOffset])
-        )
-        if startSeconds > .zero {
-            client.seek(to: startSeconds.seconds)
-        }
         client.setRate(Double(manager?.rate ?? 1))
         setSubtitleConfiguration(Defaults[.VideoPlayer.Subtitle.configuration])
         client.play()
@@ -413,10 +431,21 @@ private final class MPVPlayerUIView: UIView {
     func updateDrawableSize() {
         guard let metalLayer = layer as? CAMetalLayer else { return }
         metalLayer.contentsScale = window?.screen.nativeScale ?? UIScreen.main.nativeScale
-        metalLayer.drawableSize = CGSize(
+
+        let drawableSize = CGSize(
             width: bounds.width * metalLayer.contentsScale,
             height: bounds.height * metalLayer.contentsScale
         )
+
+        /// `layoutSubviews` runs on every frame of the animation that opens a
+        /// supplement, and each accepted size costs MPV a swapchain.
+        guard drawableSize.width > 1,
+              drawableSize.height > 1,
+              drawableSize != metalLayer.drawableSize
+        else { return }
+
+        metalLayer.drawableSize = drawableSize
+        proxy.layerDidChangeSize()
     }
 }
 
