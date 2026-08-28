@@ -1,10 +1,10 @@
 name: MPV Player CI
 
+# Pull requests only. On a push to main the release workflow builds and tests
+# the same commit for real, so running this there duplicated ~20 minutes of
+# macOS work against a five-job concurrency limit and delayed the release it
+# was racing.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - altstore-source.json
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -76,14 +76,5 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             build
 
-      - name: Build tvOS compatibility
-        run: |
-          xcodebuild -quiet \
-            -skipMacroValidation \
-            -skipPackagePluginValidation \
-            -project Swiftfin.xcodeproj \
-            -scheme 'Swiftfin tvOS' \
-            -configuration Debug \
-            -destination 'generic/platform=tvOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+      # tvOS is not built here: ci.yml already builds that scheme on every pull
+      # request, and this fork's changes to it are compiled out anyway.

@@ -22,16 +22,18 @@ env:
   MAC_ZIP_NAME: Swiftfin-Enhanced-Mac.zip
   MAC_SHA_NAME: Swiftfin-Enhanced-Mac.zip.sha256
 
+# The iOS app is what a device is waiting for, so nothing else is allowed onto
+# its path: tests run beside the build rather than before it, publishing needs
+# no macOS at all, and the Mac app is built after the AltStore source already
+# points at the new release.
 jobs:
-  publish:
-    name: Test, build, and publish
+  test:
+    name: Lint and test
     runs-on: macos-26
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Install build tools
         run: brew bundle --file Brewfile
@@ -53,10 +55,18 @@ jobs:
           timeout_minutes: 20
           command: carthage update --use-xcframeworks --cache-builds
 
+      # validate-pr.yaml only runs these on pull_request, but this fork commits
+      # straight to main, where they would otherwise never run.
+      - name: Lint
+        run: |
+          swiftformat . --lint --config .swiftformat
+          swiftlint lint --strict --config .swiftlint.yml
+          swift Scripts/Translations/FindUnusedStrings.swift
+
       - name: Test AltStore source generator
         run: python3 -m unittest Scripts/test_update_altstore_source.py
 
-      - name: Test enhanced player
+      - name: Test MPV player
         run: |
           xcodebuild -quiet \
             -skipMacroValidation \
@@ -68,6 +78,41 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             -only-testing:SwiftfinTests \
             test
+
+  build:
+    name: Build iOS app
+    runs-on: macos-26
+
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      build_version: ${{ steps.metadata.outputs.build_version }}
+      tag: ${{ steps.metadata.outputs.tag }}
+      release_date: ${{ steps.metadata.outputs.release_date }}
+      short_sha: ${{ steps.metadata.outputs.short_sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: brew bundle --file Brewfile
+
+      - name: Cache Carthage
+        uses: actions/cache@v4
+        id: carthage-cache
+        with:
+          path: Carthage
+          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
+          restore-keys: ${{ runner.os }}-carthage-
+
+      - name: Build Carthage dependencies
+        if: steps.carthage-cache.outputs.cache-hit != 'true'
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 4
+          retry_wait_seconds: 10
+          timeout_minutes: 20
+          command: carthage update --use-xcframeworks --cache-builds
 
       - name: Create release metadata
         id: metadata
@@ -106,16 +151,16 @@ jobs:
             build
 
       - name: Package and verify IPA
-        id: package
         run: |
           app="$RUNNER_TEMP/SwiftfinDerivedData/Build/Products/Release-iphoneos/Swiftfin iOS.app"
           payload="$RUNNER_TEMP/AltStorePayload/Payload"
-          ipa="$RUNNER_TEMP/$IPA_NAME"
+          staging="$RUNNER_TEMP/ios-app"
+          ipa="$staging/$IPA_NAME"
           test -d "$app"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")" = "$BUNDLE_IDENTIFIER"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")" = "${{ steps.metadata.outputs.version }}"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")" = "${{ steps.metadata.outputs.build_version }}"
-          mkdir -p "$payload"
+          mkdir -p "$payload" "$staging"
           ditto --norsrc --noextattr "$app" "$payload/Swiftfin iOS.app"
           ditto -c -k --norsrc --noextattr --keepParent "$RUNNER_TEMP/AltStorePayload/Payload" "$ipa"
           test -s "$ipa"
@@ -124,8 +169,101 @@ jobs:
             echo "IPA contains forbidden Finder metadata"
             exit 1
           fi
-          echo "app=$app" >> "$GITHUB_OUTPUT"
-          echo "ipa=$ipa" >> "$GITHUB_OUTPUT"
+          # The AltStore source generator reads the app's own Info.plist, so it
+          # travels with the IPA rather than being re-derived after download.
+          cp "$app/Info.plist" "$staging/Info.plist"
+
+      # Publishing runs on Linux, so the IPA has to cross jobs. Already-
+      # compressed, so no second compression pass.
+      - name: Upload iOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app
+          path: ${{ runner.temp }}/ios-app
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    name: Publish release
+    needs: [test, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download iOS app
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-app
+          path: ios-app
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          notes="Automated Swiftfin Enhanced build from commit ${{ needs.build.outputs.short_sha }}. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Install iOS/iPadOS through the AltStore Classic source, or use the checksum-verified Apple silicon Mac package, which is attached a few minutes after this release is created."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "ios-app/$IPA_NAME#$IPA_NAME" --clobber
+          else
+            gh release create "$TAG" \
+              "ios-app/$IPA_NAME#$IPA_NAME" \
+              --title "Swiftfin Enhanced ${{ needs.build.outputs.version }} (${{ needs.build.outputs.build_version }})" \
+              --notes "$notes"
+          fi
+
+      - name: Update AltStore source
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          python3 Scripts/update_altstore_source.py \
+            --source altstore-source.json \
+            --ipa "ios-app/$IPA_NAME" \
+            --info-plist "ios-app/Info.plist" \
+            --date "${{ needs.build.outputs.release_date }}" \
+            --download-url "https://github.com/${{ github.repository }}/releases/download/$TAG/$IPA_NAME" \
+            --description "Automated build from ${{ needs.build.outputs.short_sha }}. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes."
+
+      - name: Commit updated source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add altstore-source.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Update AltStore source for ${{ needs.build.outputs.tag }} [skip ci]"
+          git push origin HEAD:main
+
+  mac:
+    name: Build Mac app
+    needs: [build, publish]
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: brew bundle --file Brewfile
+
+      - name: Cache Carthage
+        uses: actions/cache@v4
+        id: carthage-cache
+        with:
+          path: Carthage
+          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
+          restore-keys: ${{ runner.os }}-carthage-
+
+      - name: Build Carthage dependencies
+        if: steps.carthage-cache.outputs.cache-hit != 'true'
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 4
+          retry_wait_seconds: 10
+          timeout_minutes: 20
+          command: carthage update --use-xcframeworks --cache-builds
 
       - name: Build unsigned Apple silicon Mac app
         run: |
@@ -143,8 +281,8 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             PRODUCT_BUNDLE_IDENTIFIER="$MAC_BUNDLE_IDENTIFIER" \
             INFOPLIST_KEY_CFBundleDisplayName='Swiftfin Enhanced' \
-            MARKETING_VERSION="${{ steps.metadata.outputs.version }}" \
-            CURRENT_PROJECT_VERSION="${{ steps.metadata.outputs.build_version }}" \
+            MARKETING_VERSION="${{ needs.build.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ needs.build.outputs.build_version }}" \
             build
 
       - name: Package and verify Mac app
@@ -163,8 +301,8 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "$MAC_BUNDLE_IDENTIFIER"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$app/Contents/Info.plist")" = "Swiftfin Enhanced"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$app/Contents/Info.plist")" = "MacOSX"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "${{ steps.metadata.outputs.version }}"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" = "${{ steps.metadata.outputs.build_version }}"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "${{ needs.build.outputs.version }}"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" = "${{ needs.build.outputs.build_version }}"
           test "$(lipo -archs "$app/Contents/MacOS/Swiftfin iOS")" = "arm64"
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
@@ -175,46 +313,12 @@ jobs:
           echo "zip=$zip" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      - name: Publish GitHub release
+      - name: Attach Mac app to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.metadata.outputs.tag }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
-          notes="Automated Swiftfin Enhanced build from commit ${{ steps.metadata.outputs.short_sha }}. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Install iOS/iPadOS through the AltStore Classic source, or use the checksum-verified Apple silicon Mac package."
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" \
-              "${{ steps.package.outputs.ipa }}#$IPA_NAME" \
-              "${{ steps.package_mac.outputs.zip }}#$MAC_ZIP_NAME" \
-              "${{ steps.package_mac.outputs.sha }}#$MAC_SHA_NAME" \
-              --clobber
-          else
-            gh release create "$TAG" \
-              "${{ steps.package.outputs.ipa }}#$IPA_NAME" \
-              "${{ steps.package_mac.outputs.zip }}#$MAC_ZIP_NAME" \
-              "${{ steps.package_mac.outputs.sha }}#$MAC_SHA_NAME" \
-              --title "Swiftfin Enhanced ${{ steps.metadata.outputs.version }} (${{ steps.metadata.outputs.build_version }})" \
-              --notes "$notes"
-          fi
-
-      - name: Update AltStore source
-        env:
-          TAG: ${{ steps.metadata.outputs.tag }}
-        run: |
-          python3 Scripts/update_altstore_source.py \
-            --source altstore-source.json \
-            --ipa "${{ steps.package.outputs.ipa }}" \
-            --info-plist "${{ steps.package.outputs.app }}/Info.plist" \
-            --date "${{ steps.metadata.outputs.release_date }}" \
-            --download-url "https://github.com/${{ github.repository }}/releases/download/$TAG/$IPA_NAME" \
-            --description "Automated build from ${{ steps.metadata.outputs.short_sha }}. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes."
-
-      - name: Commit updated source
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add altstore-source.json
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "Update AltStore source for ${{ steps.metadata.outputs.tag }} [skip ci]"
-          git push origin HEAD:main
+          gh release upload "$TAG" \
+            "${{ steps.package_mac.outputs.zip }}#$MAC_ZIP_NAME" \
+            "${{ steps.package_mac.outputs.sha }}#$MAC_SHA_NAME" \
+            --clobber
