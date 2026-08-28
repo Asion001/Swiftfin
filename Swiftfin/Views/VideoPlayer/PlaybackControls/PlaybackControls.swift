@@ -41,18 +41,20 @@ extension VideoPlayer {
             containerState.isScrubbing
         }
 
+        private var isPresentingFullScreenSupplement: Bool {
+            !containerState.isCompact &&
+                containerState.selectedSupplement?.presentationStyle == .expanded
+        }
+
         // MARK: body
 
         var body: some View {
             ZStack {
-
-                // MARK: - Buttons and Supplements
-
                 VStack {
                     Toolbar()
                         .frame(height: 50)
-                        .isVisible(!isScrubbing && isPresentingOverlay)
-                        .allowsHitTesting(!isScrubbing && isPresentingOverlay)
+                        .isVisible(!isScrubbing && isPresentingOverlay && !isPresentingFullScreenSupplement)
+                        .allowsHitTesting(!isScrubbing && isPresentingOverlay && !isPresentingFullScreenSupplement)
                         .padding(.top, safeAreaInsets.top)
                         .padding(.leading, safeAreaInsets.leading)
                         .padding(.trailing, safeAreaInsets.trailing)
