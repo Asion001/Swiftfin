@@ -7,6 +7,7 @@
 //
 
 #if os(iOS)
+import Combine
 import Defaults
 import Foundation
 
@@ -79,12 +80,24 @@ final class MPVUpscalerController: ObservableObject {
     }
 
     private let configurationStore: MPVConfigurationStore
-    private weak var client: MPVClientCore?
+    private var cancellables = Set<AnyCancellable>()
+    private weak var client: (any MPVOptionConfigurable)?
 
     init(configurationStore: MPVConfigurationStore = .shared) {
         self.configurationStore = configurationStore
         self.requestedProvider = Defaults[.VideoPlayer.enhancementProvider]
         self.requestedMode = Defaults[.VideoPlayer.enhancementMode]
+
+        // The cap is only useful if it is re-applied when the device state it
+        // depends on changes: a device that starts cool and heats up mid-file
+        // would otherwise keep running the tier it started with.
+        NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification)
+            .merge(with: NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange))
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.apply()
+            }
+            .store(in: &cancellables)
     }
 
     /// Binds to a client and probes it for MetalFX support before applying the
@@ -92,7 +105,7 @@ final class MPVUpscalerController: ObservableObject {
     ///
     /// The probe is queued behind the client's initialization on its own serial
     /// queue, so it observes a fully initialized handle.
-    func attach(to client: MPVClientCore) {
+    func attach(to client: any MPVOptionConfigurable) {
         self.client = client
 
         client.probeOption(named: MPVUpscaler.metalFXOptionName) { [weak self] isSupported in
@@ -124,6 +137,13 @@ final class MPVUpscalerController: ObservableObject {
 
         missingShaders = missing
         client.setShaders(shaderPaths)
+
+        // libplacebo's own scaling settings. Every tier sends the full set so
+        // switching away from a tier restores the defaults instead of leaving
+        // the previous tier's values applied.
+        for (name, value) in configuration.options.sorted(by: { $0.key < $1.key }) {
+            client.setOption(name: name, value: value)
+        }
 
         guard isMetalFXSupported else { return }
 

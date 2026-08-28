@@ -37,6 +37,13 @@ final class SleepTimerController: ObservableObject {
     @Published
     private(set) var mode: Mode = .duration
 
+    /// Which mode the timer was in when it last finished.
+    ///
+    /// Finishing resets `mode`, so observers reacting to `expirationCount`
+    /// would otherwise always see `.duration` and report the wrong thing.
+    @Published
+    private(set) var lastFinishedMode: Mode = .duration
+
     var isActive: Bool {
         deadline != nil || mode == .endOfItem
     }
@@ -73,7 +80,12 @@ final class SleepTimerController: ObservableObject {
         manager.$state
             .sink { [weak self] state in
                 guard state == .stopped else { return }
-                self?.cancel()
+
+                if self?.mode == .endOfItem {
+                    self?.finishEndOfItem()
+                } else {
+                    self?.cancel()
+                }
             }
             .store(in: &cancellables)
 
@@ -188,6 +200,16 @@ final class SleepTimerController: ObservableObject {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
+    /// Reports the end-of-item timer as finished.
+    ///
+    /// The manager stops playback itself in this mode, so the controller never
+    /// reaches `expire()`; without this the timer would end with no feedback.
+    private func finishEndOfItem() {
+        cancel()
+        lastFinishedMode = .endOfItem
+        expirationCount += 1
+    }
+
     /// Mirrors the item's remaining runtime so the menu can show a countdown.
     ///
     /// The manager owns the actual stop, so this is display only and never
@@ -219,6 +241,7 @@ final class SleepTimerController: ObservableObject {
         configuredDuration = nil
         deadline = nil
         remainingDuration = 0
+        lastFinishedMode = .duration
         expirationCount += 1
 
         if let expirationHandler {
@@ -250,6 +273,10 @@ enum SleepTimerStrings {
     static let paused = String(
         localized: "sleep-timer.paused",
         defaultValue: "Sleep timer finished. Playback paused."
+    )
+    static let finished = String(
+        localized: "sleep-timer.finished",
+        defaultValue: "Sleep timer finished."
     )
     static let finishEpisode = String(
         localized: "sleep-timer.finish-episode",

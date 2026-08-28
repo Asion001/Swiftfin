@@ -157,7 +157,13 @@ struct VideoPlayer: View {
         }
         #if os(iOS)
         .onChange(of: sleepTimerController.expirationCount) {
-            toaster.present(SleepTimerStrings.paused, systemName: "moon.zzz.fill")
+            // End-of-item mode lets the item finish rather than pausing
+            // mid-playback, so "playback paused" would be wrong there.
+            let message = sleepTimerController.lastFinishedMode == .endOfItem
+                ? SleepTimerStrings.finished
+                : SleepTimerStrings.paused
+
+            toaster.present(message, systemName: "moon.zzz.fill")
         }
         .sheet(item: $containerState.presentedModal) { modal in
             Group {

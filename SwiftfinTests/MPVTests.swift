@@ -208,4 +208,87 @@ final class MPVTests: XCTestCase {
 
         XCTAssertEqual(store.shaderURL(named: name), userShader)
     }
+
+    // MARK: - What actually reaches MPV
+
+    /// Records what the controller sends instead of talking to libmpv.
+    ///
+    /// The earlier tests asserted on `MPVUpscaler.configuration(...)` alone,
+    /// which passed while the controller never forwarded the scaler options.
+    private final class ClientSpy: MPVOptionConfigurable, @unchecked Sendable {
+
+        private let lock = NSLock()
+        private var _options: [String: String] = [:]
+        private var _shaders: [String] = []
+
+        var options: [String: String] {
+            lock.withLock { _options }
+        }
+
+        var shaders: [String] {
+            lock.withLock { _shaders }
+        }
+
+        func setOption(name: String, value: String) {
+            lock.withLock { _options[name] = value }
+        }
+
+        func setShaders(_ paths: [String]) {
+            lock.withLock { _shaders = paths }
+        }
+
+        func probeOption(named name: String, completion: @escaping @Sendable (Bool) -> Void) {
+            completion(false)
+        }
+    }
+
+    @MainActor
+    func testShaderTierSendsItsScalerOptionsToTheClient() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+        controller.attach(to: spy)
+
+        controller.requestedProvider = .shader
+        controller.requestedMode = .fast
+
+        /// The cheapest tier is defined as better built-in scaling rather than
+        /// a shader, so it is only distinguishable from Off by these options.
+        XCTAssertTrue(spy.shaders.isEmpty)
+        XCTAssertEqual(spy.options["scale"], "ewa_lanczossharp")
+        XCTAssertEqual(spy.options["cscale"], "ewa_lanczossoft")
+        XCTAssertEqual(spy.options["sigmoid-upscaling"], "yes")
+    }
+
+    @MainActor
+    func testTurningTheUpscalerOffRestoresDefaultScalers() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+        controller.attach(to: spy)
+
+        controller.requestedProvider = .shader
+        controller.requestedMode = .fast
+        controller.requestedMode = .off
+
+        /// Switching away has to actively restore the defaults; leaving the
+        /// previous tier's values applied is what "off" must not mean.
+        XCTAssertTrue(spy.shaders.isEmpty)
+        XCTAssertEqual(spy.options["scale"], "lanczos")
+        XCTAssertEqual(spy.options["sigmoid-upscaling"], "no")
+    }
+
+    @MainActor
+    func testMetalFXOptionsAreNotSentWhenTheBuildLacksThePatch() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+        controller.attach(to: spy)
+
+        controller.requestedProvider = .metalFX
+        controller.requestedMode = .quality
+
+        /// The spy reports the option as unknown, which is how a stock libmpv
+        /// behaves; sending it anyway would log an error on every change.
+        XCTAssertFalse(controller.isMetalFXSupported)
+        XCTAssertNil(spy.options[MPVUpscaler.metalFXOptionName])
+        XCTAssertNil(spy.options[MPVUpscaler.metalFXSharpnessOptionName])
+    }
 }

@@ -39,7 +39,7 @@ The source and IPA releases update automatically after conflict-free merges from
 
 ### Swiftfin Enhanced for Mac
 
-The same releases include an Apple silicon Mac Catalyst app with Native and Enhanced AVPlayer playback. The checksum-verified installer can also enable daily background updates:
+The same releases include an Apple silicon Mac Catalyst app with both the Native (AVPlayer) and MPV players. The checksum-verified installer can also enable daily background updates:
 
 ```bash
 curl -fL https://raw.githubusercontent.com/Asion001/Swiftfin/main/Scripts/install_macos.sh -o /tmp/install-swiftfin-enhanced.sh
