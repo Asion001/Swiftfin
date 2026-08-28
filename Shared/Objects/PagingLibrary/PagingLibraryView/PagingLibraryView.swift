@@ -72,13 +72,7 @@ struct PagingLibraryView<Library: PagingLibrary>: View where Library.Element: Li
     @ViewBuilder
     private var elementsView: some View {
         AlternateLayoutView {
-            /// Measured through the safe area, not within it: a bar added by
-            /// `safeAreaBar` consumes the top inset for everything laid out
-            /// inside it, so a measurement taken within reports zero. The grid
-            /// below draws through its vertical safe area, so it needs the real
-            /// distance to the navigation and filter bars above it.
             Color.clear
-                .ignoresSafeArea(edges: .vertical)
         } content: { frame in
 
             let insets: EdgeInsets = if #available(iOS 26, *), isSafeAreaBarApplied {
