@@ -122,6 +122,14 @@ final class MediaPlayerManager: ViewModel {
         }
     }
 
+    /// When set, playback stops once the current item reaches its natural end
+    /// instead of advancing to the next one.
+    ///
+    /// Used by the sleep timer's "finish this episode" mode, which has to let
+    /// the item play out rather than pausing partway through.
+    @Published
+    var stopsAtEndOfCurrentItem = false
+
     @Published
     private(set) var item: BaseItemDto
     @Published
@@ -243,7 +251,10 @@ final class MediaPlayerManager: ViewModel {
             return
         }
 
-        if let nextItem = queue?.nextItem, try authenticatedUser.data.configuration?.enableNextEpisodeAutoPlay == true {
+        if let nextItem = queue?.nextItem,
+           !stopsAtEndOfCurrentItem,
+           try authenticatedUser.data.configuration?.enableNextEpisodeAutoPlay == true
+        {
             await self.playNewItem(provider: nextItem)
         } else {
             await self.stop()
@@ -280,6 +291,7 @@ final class MediaPlayerManager: ViewModel {
 
     @Function(\Action.Cases.playNewItem)
     private func _playNewItem(_ provider: MediaPlayerItemProvider) async throws {
+        stopsAtEndOfCurrentItem = false
         item = provider.item
         setSupplements()
         proxy?.stop()

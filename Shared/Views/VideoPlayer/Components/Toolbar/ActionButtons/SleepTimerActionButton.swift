@@ -14,6 +14,9 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         @EnvironmentObject
         private var controller: SleepTimerController
 
+        @EnvironmentObject
+        private var manager: MediaPlayerManager
+
         @ViewContextContains(.isInMenu)
         private var isInMenu
 
@@ -22,26 +25,41 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         @State
         private var isCustomDurationPresented = false
 
+        /// "End of this episode" reads better than a generic label, and the
+        /// distinction matters: only episodes have a next item to suppress.
+        private var endOfItemTitle: String {
+            switch manager.item.type {
+            case .episode:
+                SleepTimerStrings.finishEpisode
+            case .movie:
+                SleepTimerStrings.finishMovie
+            default:
+                SleepTimerStrings.finishItem
+            }
+        }
+
         private var labelTitle: String {
-            if controller.isActive {
+            guard controller.isActive else { return SleepTimerStrings.title }
+
+            return switch controller.mode {
+            case .endOfItem:
+                SleepTimerStrings.endsIn(controller.formattedRemainingDuration)
+            case .duration:
                 SleepTimerStrings.remaining(controller.formattedRemainingDuration)
-            } else {
-                SleepTimerStrings.title
             }
         }
 
         var body: some View {
             Menu {
                 if controller.isActive {
-                    Label(
-                        SleepTimerStrings.remaining(controller.formattedRemainingDuration),
-                        systemImage: "timer"
-                    )
+                    Label(labelTitle, systemImage: "timer")
 
-                    Button {
-                        controller.add(duration: 15 * 60)
-                    } label: {
-                        Label(SleepTimerStrings.addFifteenMinutes, systemImage: "plus.circle")
+                    if controller.mode == .duration {
+                        Button {
+                            controller.add(duration: 15 * 60)
+                        } label: {
+                            Label(SleepTimerStrings.addFifteenMinutes, systemImage: "plus.circle")
+                        }
                     }
 
                     Button(role: .destructive) {
@@ -53,13 +71,25 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                     Divider()
                 }
 
+                Button {
+                    controller.setEndOfItem()
+                } label: {
+                    Label(
+                        endOfItemTitle,
+                        systemImage: controller.mode == .endOfItem ? "checkmark" : "play.square"
+                    )
+                }
+
+                Divider()
+
                 ForEach(SleepTimerController.presetMinutes, id: \.self) { minutes in
                     Button {
                         controller.set(duration: TimeInterval(minutes * 60))
                     } label: {
                         Label(
                             SleepTimerStrings.minutes(minutes),
-                            systemImage: controller.configuredDuration == TimeInterval(minutes * 60)
+                            systemImage: controller.mode == .duration
+                                && controller.configuredDuration == TimeInterval(minutes * 60)
                                 ? "checkmark"
                                 : "timer"
                         )

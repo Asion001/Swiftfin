@@ -17,6 +17,15 @@ final class SleepTimerController: ObservableObject {
     static let minimumDuration: TimeInterval = 60
     static let maximumDuration: TimeInterval = 24 * 60 * 60
 
+    /// How the timer decides when to finish.
+    enum Mode: Equatable {
+        /// Pause after a wall-clock duration.
+        case duration
+        /// Let the current item play to its end, then stop instead of
+        /// advancing to the next one.
+        case endOfItem
+    }
+
     @Published
     private(set) var configuredDuration: TimeInterval?
     @Published
@@ -25,9 +34,11 @@ final class SleepTimerController: ObservableObject {
     private(set) var expirationCount = 0
     @Published
     private(set) var remainingDuration: TimeInterval = 0
+    @Published
+    private(set) var mode: Mode = .duration
 
     var isActive: Bool {
-        deadline != nil
+        deadline != nil || mode == .endOfItem
     }
 
     var formattedRemainingDuration: String {
@@ -81,7 +92,26 @@ final class SleepTimerController: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Stops playback when the current item ends.
+    ///
+    /// This is not a wall-clock deadline: seeking, pausing and rate changes all
+    /// move the real end, so the manager is asked to stop when the item
+    /// finishes and the countdown shown is just the item's remaining runtime.
+    func setEndOfItem() {
+        ticker?.cancel()
+        ticker = nil
+        configuredDuration = nil
+        deadline = nil
+        mode = .endOfItem
+        manager?.stopsAtEndOfCurrentItem = true
+        refreshRemainingItemDuration()
+        startTickerIfNeeded()
+    }
+
     func set(duration: TimeInterval) {
+        mode = .duration
+        manager?.stopsAtEndOfCurrentItem = false
+
         let normalizedDuration = min(
             Self.maximumDuration,
             max(Self.minimumDuration, duration.rounded())
@@ -94,7 +124,7 @@ final class SleepTimerController: ObservableObject {
     }
 
     func add(duration: TimeInterval) {
-        guard duration > 0 else { return }
+        guard duration > 0, mode == .duration else { return }
 
         let currentDate = now()
         let baseDate = max(deadline ?? currentDate, currentDate)
@@ -118,6 +148,8 @@ final class SleepTimerController: ObservableObject {
         configuredDuration = nil
         deadline = nil
         remainingDuration = 0
+        mode = .duration
+        manager?.stopsAtEndOfCurrentItem = false
     }
 
     func invalidate() {
@@ -127,6 +159,11 @@ final class SleepTimerController: ObservableObject {
     }
 
     func reconcile(at currentDate: Date? = nil) {
+        if mode == .endOfItem {
+            refreshRemainingItemDuration()
+            return
+        }
+
         guard let deadline else { return }
 
         let remaining = deadline.timeIntervalSince(currentDate ?? now())
@@ -149,6 +186,19 @@ final class SleepTimerController: ObservableObject {
         }
 
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    /// Mirrors the item's remaining runtime so the menu can show a countdown.
+    ///
+    /// The manager owns the actual stop, so this is display only and never
+    /// expires the timer itself.
+    private func refreshRemainingItemDuration() {
+        guard let manager, let runtime = manager.item.runtime else {
+            remainingDuration = 0
+            return
+        }
+
+        remainingDuration = max(0, (runtime - manager.seconds).seconds)
     }
 
     private func startTickerIfNeeded() {
@@ -201,6 +251,27 @@ enum SleepTimerStrings {
         localized: "sleep-timer.paused",
         defaultValue: "Sleep timer finished. Playback paused."
     )
+    static let finishEpisode = String(
+        localized: "sleep-timer.finish-episode",
+        defaultValue: "End of this episode"
+    )
+    static let finishMovie = String(
+        localized: "sleep-timer.finish-movie",
+        defaultValue: "End of this movie"
+    )
+    static let finishItem = String(
+        localized: "sleep-timer.finish-item",
+        defaultValue: "End of this item"
+    )
+    static let endOfItemExplanation = String(
+        localized: "sleep-timer.end-of-item-explanation",
+        defaultValue: "Playback stops when this finishes instead of continuing to the next one."
+    )
+
+    static func endsIn(_ value: String) -> String {
+        String(localized: "sleep-timer.ends-in", defaultValue: "Ends in \(value)")
+    }
+
     static let energyExplanation = String(
         localized: "sleep-timer.background-explanation",
         defaultValue: "The timer uses the actual clock, continues during background audio and buffering, and pauses playback when it finishes."

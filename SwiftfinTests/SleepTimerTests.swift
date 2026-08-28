@@ -66,4 +66,66 @@ final class SleepTimerTests: XCTestCase {
         XCTAssertEqual(SleepTimerController.clockString(for: 65), "1:05")
         XCTAssertEqual(SleepTimerController.clockString(for: 3661), "1:01:01")
     }
+
+    // MARK: - End of item
+
+    @MainActor
+    func testEndOfItemModeClearsAnyRunningDurationTimer() {
+        let controller = SleepTimerController(now: { Date() }, startsTicker: false)
+        controller.set(duration: 30 * 60)
+
+        XCTAssertEqual(controller.mode, .duration)
+        XCTAssertNotNil(controller.deadline)
+
+        controller.setEndOfItem()
+
+        /// End of item is not a wall-clock deadline, so the countdown that the
+        /// duration mode was running must not survive the switch.
+        XCTAssertEqual(controller.mode, .endOfItem)
+        XCTAssertNil(controller.deadline)
+        XCTAssertNil(controller.configuredDuration)
+        XCTAssertTrue(controller.isActive)
+    }
+
+    @MainActor
+    func testAddingTimeIsIgnoredInEndOfItemMode() {
+        let controller = SleepTimerController(now: { Date() }, startsTicker: false)
+        controller.setEndOfItem()
+
+        controller.add(duration: 15 * 60)
+
+        /// There is no deadline to extend; the item's own runtime decides.
+        XCTAssertNil(controller.deadline)
+        XCTAssertEqual(controller.mode, .endOfItem)
+    }
+
+    @MainActor
+    func testCancelReturnsToDurationMode() {
+        let controller = SleepTimerController(now: { Date() }, startsTicker: false)
+        controller.setEndOfItem()
+        XCTAssertTrue(controller.isActive)
+
+        controller.cancel()
+
+        XCTAssertFalse(controller.isActive)
+        XCTAssertEqual(controller.mode, .duration)
+    }
+
+    @MainActor
+    func testEndOfItemDoesNotExpireOnItsOwn() {
+        var expirations = 0
+        let controller = SleepTimerController(
+            now: { Date() },
+            startsTicker: false,
+            expirationHandler: { expirations += 1 }
+        )
+        controller.setEndOfItem()
+
+        /// The manager stops playback at the item's end; the controller only
+        /// mirrors the remaining runtime, so ticking must never fire expiry.
+        controller.reconcile(at: Date().addingTimeInterval(60 * 60 * 12))
+
+        XCTAssertEqual(expirations, 0)
+        XCTAssertEqual(controller.mode, .endOfItem)
+    }
 }
