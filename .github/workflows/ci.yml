@@ -12,6 +12,12 @@ on:
       - ready_for_review
     branches: [ main ]
 
+# Only the newest commit on a ref is worth building. Scoped by ref, so a push
+# to main never cancels a pull request's build or the other way round.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: "Build 🔨"

@@ -11,6 +11,9 @@ on:
 permissions:
   contents: write
 
+# Deliberately not scoped by ref: two release runs must never overlap whatever
+# triggered them, since both create releases and push to main. A newer commit
+# supersedes an older one, so the older run is cancelled rather than queued.
 concurrency:
   group: altstore-release-main
   cancel-in-progress: true
@@ -204,13 +207,18 @@ jobs:
           TAG: ${{ needs.build.outputs.tag }}
         run: |
           notes="Automated Swiftfin Enhanced build from commit ${{ needs.build.outputs.short_sha }}. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Install iOS/iPadOS through the AltStore Classic source, or use the checksum-verified Apple silicon Mac package, which is attached a few minutes after this release is created."
+          # Created as a prerelease and promoted once the Mac app is attached.
+          # Scripts/install_macos.sh downloads through releases/latest, which
+          # skips prereleases, so a run cancelled between these two jobs leaves
+          # the previous complete release installable rather than a half one.
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "ios-app/$IPA_NAME#$IPA_NAME" --clobber
           else
             gh release create "$TAG" \
               "ios-app/$IPA_NAME#$IPA_NAME" \
               --title "Swiftfin Enhanced ${{ needs.build.outputs.version }} (${{ needs.build.outputs.build_version }})" \
-              --notes "$notes"
+              --notes "$notes" \
+              --prerelease
           fi
 
       - name: Update AltStore source
@@ -313,7 +321,7 @@ jobs:
           echo "zip=$zip" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      - name: Attach Mac app to the release
+      - name: Attach Mac app and promote the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.build.outputs.tag }}
@@ -322,3 +330,5 @@ jobs:
             "${{ steps.package_mac.outputs.zip }}#$MAC_ZIP_NAME" \
             "${{ steps.package_mac.outputs.sha }}#$MAC_SHA_NAME" \
             --clobber
+          # Complete now, so it can become what releases/latest resolves to.
+          gh release edit "$TAG" --prerelease=false --latest
