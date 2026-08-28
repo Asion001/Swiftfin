@@ -45,6 +45,14 @@ jobs:
           timeout_minutes: 20
           command: carthage update --use-xcframeworks --cache-builds
 
+      # validate-pr.yaml only runs these on pull_request, but this fork commits
+      # straight to main, so on the normal workflow they never ran at all.
+      - name: Lint
+        run: |
+          swiftformat . --lint --config .swiftformat
+          swiftlint lint --strict --config .swiftlint.yml
+          swift Scripts/Translations/FindUnusedStrings.swift
+
       - name: Test AltStore source generator
         run: python3 -m unittest Scripts/test_update_altstore_source.py
 

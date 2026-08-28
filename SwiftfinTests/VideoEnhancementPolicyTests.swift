@@ -31,7 +31,7 @@ final class VideoEnhancementPolicyTests: XCTestCase {
         }
     }
 
-    func testLowPowerThermalCapAndCriticalRecovery() {
+    func testLowPowerAndThermalStateCapTheTier() {
         XCTAssertEqual(
             VideoEnhancementDevicePolicy.maximumLevel(
                 isLowPowerModeEnabled: true,
@@ -46,17 +46,12 @@ final class VideoEnhancementPolicyTests: XCTestCase {
             ),
             .fast
         )
-        XCTAssertFalse(VideoEnhancementDevicePolicy.shouldReleaseCriticalBypass(
-            thermalState: .serious,
-            secondsBelowSerious: 60
-        ))
-        XCTAssertFalse(VideoEnhancementDevicePolicy.shouldReleaseCriticalBypass(
-            thermalState: .nominal,
-            secondsBelowSerious: 29.9
-        ))
-        XCTAssertTrue(VideoEnhancementDevicePolicy.shouldReleaseCriticalBypass(
-            thermalState: .fair,
-            secondsBelowSerious: 30
-        ))
+        XCTAssertEqual(
+            VideoEnhancementDevicePolicy.maximumLevel(
+                isLowPowerModeEnabled: false,
+                thermalState: .nominal
+            ),
+            .quality
+        )
     }
 }

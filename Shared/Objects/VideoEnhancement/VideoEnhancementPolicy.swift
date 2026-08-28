@@ -35,8 +35,6 @@ enum VideoEnhancementGeometry {
 }
 
 enum VideoEnhancementDevicePolicy {
-    static let criticalThermalRecoveryInterval: TimeInterval = 30
-
     static func maximumLevel(
         isLowPowerModeEnabled: Bool,
         thermalState: ProcessInfo.ThermalState
@@ -46,13 +44,6 @@ enum VideoEnhancementDevicePolicy {
         } else {
             .quality
         }
-    }
-
-    static func shouldReleaseCriticalBypass(
-        thermalState: ProcessInfo.ThermalState,
-        secondsBelowSerious: TimeInterval
-    ) -> Bool {
-        !isThermallyConstrained(thermalState) && secondsBelowSerious >= criticalThermalRecoveryInterval
     }
 
     static func isThermallyConstrained(_ state: ProcessInfo.ThermalState) -> Bool {

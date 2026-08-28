@@ -52,10 +52,22 @@ struct MPVTrack: Sendable, Equatable, Identifiable {
     let isSelected: Bool
 }
 
+/// The part of the MPV client that configuration code needs.
+///
+/// Exists so the upscaler can be driven without a live libmpv context: tests
+/// substitute a spy and assert on the exact options sent, which is what the
+/// concrete class makes impossible.
+protocol MPVOptionConfigurable: AnyObject, Sendable {
+
+    func setOption(name: String, value: String)
+    func setShaders(_ paths: [String])
+    func probeOption(named name: String, completion: @escaping @Sendable (Bool) -> Void)
+}
+
 /// A serialized libmpv owner. Normal client calls and event draining share one
 /// queue; rendering is performed internally by MPV's MoltenVK video output.
 /// This avoids the callback/client-thread deadlocks documented by libmpv.
-final class MPVClientCore: @unchecked Sendable {
+final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
 
     enum Event: @unchecked Sendable {
         case endFile(error: String?)
