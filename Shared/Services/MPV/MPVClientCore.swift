@@ -108,6 +108,7 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     private var tracks: [MPVTrack] = []
     private var upscalerApplication: MPVUpscaler.Application?
     private var isUpscalerApplicationScheduled = false
+    private var lastUpscalerApplication: UInt64 = 0
 
     init(configurationStore: MPVConfigurationStore = .shared) {
         self.configurationStore = configurationStore
@@ -219,26 +220,39 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     /// MetalFX is disabled first so no frame can enter the old MetalFX pass
     /// while its shader/scaler inputs are being replaced. This also prevents a
     /// burst of picker changes from interleaving partial configurations.
-    /// Installs an upscaler pipeline, coalescing changes that arrive together.
+    /// Installs an upscaler pipeline, rate limiting changes that arrive together.
     ///
     /// Each application leaves the current pipeline and builds another, which
     /// for MetalFX means tearing down and reallocating GPU textures. Dragging
-    /// through a picker emits one of these per step, so they are collapsed to
-    /// the last one rather than rebuilt in full for every value passed through.
+    /// through a picker emits one of these per step, and rebuilding in full for
+    /// every value passed through is both wasteful and, apparently, unstable.
+    ///
+    /// The first change is applied at once and only the ones crowding behind it
+    /// are collapsed. Delaying the first instead — which is what this did — meant
+    /// a state held for less than the interval was overwritten before it was
+    /// ever applied, so flipping quickly between two settings showed neither of
+    /// them. That is precisely what comparing two settings does.
     func applyUpscaler(_ application: MPVUpscaler.Application) {
         queue.async { [weak self] in
             guard let self else { return }
             upscalerApplication = application
 
             guard !isUpscalerApplicationScheduled else { return }
-            isUpscalerApplicationScheduled = true
 
-            queue.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            let elapsed = DispatchTime.now().uptimeNanoseconds &- lastUpscalerApplication
+
+            guard elapsed < Self.upscalerApplicationInterval else {
+                applyPendingUpscaler()
+                return
+            }
+
+            isUpscalerApplicationScheduled = true
+            queue.asyncAfter(
+                deadline: .now() + .nanoseconds(Int(Self.upscalerApplicationInterval - elapsed))
+            ) { [weak self] in
                 guard let self else { return }
                 isUpscalerApplicationScheduled = false
-
-                guard let upscalerApplication else { return }
-                applyUpscalerIfPossible(upscalerApplication)
+                applyPendingUpscaler()
             }
         }
     }
@@ -417,6 +431,16 @@ private extension MPVClientCore {
         }
 
         loadPendingURLIfPossible()
+    }
+
+    /// The shortest gap between two pipeline rebuilds.
+    static let upscalerApplicationInterval: UInt64 = 150_000_000
+
+    func applyPendingUpscaler() {
+        lastUpscalerApplication = DispatchTime.now().uptimeNanoseconds
+
+        guard let upscalerApplication else { return }
+        applyUpscalerIfPossible(upscalerApplication)
     }
 
     func applyUpscalerIfPossible(_ application: MPVUpscaler.Application) {
