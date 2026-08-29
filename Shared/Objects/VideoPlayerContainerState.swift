@@ -31,6 +31,14 @@ class VideoPlayerContainerState: ObservableObject {
     @Published
     var isAspectFilled: Bool = false
 
+    /// How far the picture is scaled past fitting the surface. `1` fits.
+    ///
+    /// Only players conforming to `MediaPlayerZoomConfigurable` can hold a value
+    /// between the two ends; for the rest this stays in step with
+    /// `isAspectFilled`.
+    @Published
+    var zoomScale: CGFloat = 1
+
     @Published
     var isGestureLocked: Bool = false {
         didSet {

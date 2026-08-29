@@ -391,6 +391,33 @@ final class MPVTests: XCTestCase {
         XCTAssertEqual(spy.shaders, selected)
     }
 
+    // MARK: - Zoom
+
+    func testFillZoomIsTheScaleThatTakesAWideFilmToTheScreenEdges() {
+        /// A 2.39:1 film on a 16:9 surface: fitting leaves bars, filling needs
+        /// the picture roughly a third wider than fitted.
+        let fill = MPVZoomGeometry.fillScale(
+            video: CGSize(width: 2390, height: 1000),
+            surface: CGSize(width: 1920, height: 1080)
+        )
+
+        XCTAssertNotNil(fill)
+        XCTAssertEqual(fill ?? 0, 1.344, accuracy: 0.001)
+
+        /// A film matching the surface is already filling it, so there is
+        /// nothing between the two detents to choose from.
+        XCTAssertEqual(
+            MPVZoomGeometry.fillScale(
+                video: CGSize(width: 1920, height: 1080),
+                surface: CGSize(width: 1920, height: 1080)
+            ) ?? 0,
+            1,
+            accuracy: 0.0001
+        )
+
+        XCTAssertNil(MPVZoomGeometry.fillScale(video: .zero, surface: CGSize(width: 100, height: 100)))
+    }
+
     @MainActor
     func testTurningTheUpscalerOffRestoresDefaultScalers() {
         let spy = ClientSpy()

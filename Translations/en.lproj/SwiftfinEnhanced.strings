@@ -11,6 +11,9 @@
 "enhancement.bypass.pip" = "Unavailable during Picture in Picture";
 "enhancement.bypass.target" = "The source already matches the display size";
 "enhancement.bypass.thermal" = "Paused while the device cools down";
+"enhancement.compare" = "Hold to compare";
+"enhancement.compare-footer" = "Hold to see the picture with no upscaling at all, and release to put it back. The selection above is not changed.";
+"enhancement.comparing" = "Comparing";
 "enhancement.energy-warning" = "Real-time upscaling uses the GPU and may increase battery use and device temperature.";
 "enhancement.metalfx-unavailable" = "MetalFX needs Swiftfin's enhanced MPV build. This build will use the original picture instead.";
 "enhancement.missing-shaders" = "These shader files are missing from this build: %@";
