@@ -95,6 +95,7 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     private var isLayerSizeCheckScheduled = false
     private var lastLayerSizeCheck: UInt64 = 0
     private var lastReportedLayerSizeDrift: String?
+    private var hasReportedLayerSizeCheck = false
     private var handle: OpaquePointer?
     private var isInitialized = false
     private var layer: CAMetalLayer?
@@ -119,6 +120,20 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     func attach(to layer: CAMetalLayer) {
         queue.async { [weak self] in
             self?.initializeIfNeeded(layer: layer)
+        }
+    }
+
+    /// Tears the context down, but only while `layer` is still the one it draws
+    /// into.
+    ///
+    /// Called when the view owning that layer goes away. The check matters
+    /// because a replacement view can be attached before the old one is
+    /// released, and shutting down then would kill the context that just took
+    /// over.
+    func shutdown(ownedBy layer: CAMetalLayer) {
+        queue.async { [weak self] in
+            guard let self, self.layer === layer else { return }
+            destroyHandle()
         }
     }
 
@@ -293,6 +308,17 @@ private extension MPVClientCore {
     ]
 
     func initializeIfNeeded(layer: CAMetalLayer) {
+        /// MPV is handed the layer once, as `wid`, and renders into that one for
+        /// the life of the context. A context that outlives the view it was
+        /// built for therefore keeps drawing into a layer nobody is showing —
+        /// the picture is black while the audio plays on. Rebuild against the
+        /// layer that is actually on screen instead of quietly keeping the old
+        /// one.
+        if isInitialized, self.layer !== layer {
+            emit(.log("MPV was given a new layer; restarting the context"))
+            destroyHandle()
+        }
+
         self.layer = layer
         guard !isInitialized else { return }
 
@@ -446,6 +472,13 @@ private extension MPVClientCore {
 
         /// Zero until the first file is configured, which is not drift.
         guard let outputWidth, let outputHeight, outputWidth > 0, outputHeight > 0 else { return }
+
+        /// Said once, so that a log without any of the lines below means the
+        /// sizes agreed rather than that this check never read anything.
+        if !hasReportedLayerSizeCheck {
+            hasReportedLayerSizeCheck = true
+            emit(.log("MPV surface is \(outputWidth)x\(outputHeight) for a \(width)x\(height) layer"))
+        }
         guard outputWidth != width || outputHeight != height else {
             lastReportedLayerSizeDrift = nil
             return
@@ -715,6 +748,8 @@ private extension MPVClientCore {
         mpv_terminate_destroy(handle)
         self.handle = nil
         isInitialized = false
+        hasReportedLayerSizeCheck = false
+        lastReportedLayerSizeDrift = nil
         tracks = []
         layer = nil
     }

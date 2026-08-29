@@ -241,10 +241,29 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     }
 
     func attach(to layer: CAMetalLayer) {
+        /// A second layer means the surface was rebuilt under a context that was
+        /// already running. The context restarts against the new layer, so the
+        /// file it was playing has to be opened again, from where it had got to.
+        let isReplacingLayer = metalLayer != nil && metalLayer !== layer
+
         metalLayer = layer
         client.attach(to: layer)
         upscaler.attach(to: client)
         updateDynamicRange()
+
+        if isReplacingLayer, let playbackItem {
+            load(item: playbackItem, from: manager?.seconds ?? .zero)
+        }
+    }
+
+    /// Ends the MPV context when the view that owns its layer is released.
+    ///
+    /// Playback used to be stopped only by the manager reaching `.stopped`. When
+    /// that did not reach the client the context stayed alive behind a dismissed
+    /// player — audible, invisible, and still holding a GPU context that the next
+    /// one had to start alongside.
+    nonisolated func playerSurfaceDidDeinit(layer: CAMetalLayer) {
+        client.shutdown(ownedBy: layer)
     }
 
     /// See `MPVClientCore.synchronizeWithLayerSize()`: MPV cannot notice that the
@@ -261,7 +280,7 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
 
 private extension MPVMediaPlayerProxy {
 
-    func load(item: MediaPlayerItem) {
+    func load(item: MediaPlayerItem, from seconds: Duration? = nil) {
         playbackItem = item
         isBuffering.value = true
         diagnostics.record(log: "Loading \(item.url.lastPathComponent)")
@@ -270,7 +289,10 @@ private extension MPVMediaPlayerProxy {
         let subtitleIndex = item.indexMap.playerIndex(for: item.selectedSubtitleStreamIndex)
         client.selectTrack(kind: .audio, ffIndex: audioIndex)
         client.selectTrack(kind: .subtitle, ffIndex: subtitleIndex)
-        client.load(url: item.url, startSeconds: startSeconds(for: item).seconds)
+        client.load(
+            url: item.url,
+            startSeconds: (seconds ?? startSeconds(for: item)).seconds
+        )
     }
 
     /// A live stream has no meaningful resume position, and asking for one only
@@ -439,6 +461,11 @@ private final class MPVPlayerUIView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        guard let metalLayer = layer as? CAMetalLayer else { return }
+        proxy.playerSurfaceDidDeinit(layer: metalLayer)
     }
 
     override func layoutSubviews() {
