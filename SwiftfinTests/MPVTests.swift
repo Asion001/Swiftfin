@@ -375,7 +375,10 @@ final class MPVTests: XCTestCase {
         let selected = spy.shaders
         XCTAssertFalse(selected.isEmpty)
 
-        controller.setComparingBaseline(true)
+        controller.startComparing()
+        controller.toggleComparedSide()
+
+        XCTAssertTrue(controller.isComparing)
 
         /// Comparing has to reach the player — a control that only changes a
         /// label proves nothing about the picture.
@@ -387,7 +390,12 @@ final class MPVTests: XCTestCase {
         XCTAssertEqual(controller.requestedProvider, .shader)
         XCTAssertEqual(controller.requestedMode, .balanced)
 
-        controller.setComparingBaseline(false)
+        /// Leaving has to land on the selection rather than wherever the last
+        /// toggle left it, or stopping could strand the user on the baseline.
+        controller.stopComparing()
+
+        XCTAssertFalse(controller.isComparing)
+        XCTAssertFalse(controller.isComparingBaseline)
         XCTAssertEqual(spy.shaders, selected)
     }
 

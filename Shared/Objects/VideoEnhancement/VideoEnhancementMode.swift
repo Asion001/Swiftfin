@@ -186,11 +186,11 @@ enum VideoEnhancementStrings {
         enhancedLocalized: "enhancement.metalfx-unavailable",
         defaultValue: "MetalFX needs Swiftfin's enhanced MPV build. This build will use the original picture instead."
     )
-    static let compare = String(enhancedLocalized: "enhancement.compare", defaultValue: "Hold to compare")
-    static let comparing = String(enhancedLocalized: "enhancement.comparing", defaultValue: "Comparing")
+    static let compare = String(enhancedLocalized: "enhancement.compare", defaultValue: "Compare")
+    static let stopComparing = String(enhancedLocalized: "enhancement.stop-comparing", defaultValue: "Stop comparing")
     static let compareFooter = String(
         enhancedLocalized: "enhancement.compare-footer",
-        defaultValue: "Hold to see the picture with no upscaling at all, and release to put it back. The selection above is not changed."
+        defaultValue: "Closes this and leaves a control over the video for switching the upscaler on and off. The selection above is not changed."
     )
     static let performance = String(enhancedLocalized: "enhancement.performance", defaultValue: "Performance monitor")
     static let energyWarning = String(
