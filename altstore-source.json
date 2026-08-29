@@ -23,6 +23,17 @@
       "versions": [
         {
           "version": "2026.8.29",
+          "buildVersion": "1788038251",
+          "marketingVersion": "Enhanced 2026.8.29 (1788038251)",
+          "date": "2026-08-29T21:17:31Z",
+          "localizedDescription": "Automated build from 6d57f2f. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.29-1788038251/Swiftfin-Enhanced.ipa",
+          "size": 196462272,
+          "sha256": "006070cd4c1dd2e6189796df73a5fcce8b1ced3899c7a6130986e57e84eff109",
+          "minOSVersion": "18.6"
+        },
+        {
+          "version": "2026.8.29",
           "buildVersion": "1788034390",
           "marketingVersion": "Enhanced 2026.8.29 (1788034390)",
           "date": "2026-08-29T20:13:10Z",
@@ -228,17 +239,6 @@
           "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787509700/Swiftfin-Enhanced.ipa",
           "size": 183146527,
           "sha256": "8bdd493b704a6c3467c92bf0042fad5dc05f99caf280b11e7773b477a0ffdebf",
-          "minOSVersion": "18.6"
-        },
-        {
-          "version": "2026.8.23",
-          "buildVersion": "1787497588",
-          "marketingVersion": "Enhanced 2026.8.23 (1787497588)",
-          "date": "2026-08-23T15:06:28Z",
-          "localizedDescription": "Automated build from 47d3410 with Anime4K Metal enhancement, playback sleep timer, and current upstream Swiftfin changes.",
-          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787497588/Swiftfin-Enhanced.ipa",
-          "size": 183127357,
-          "sha256": "507ad8cd2c3a0b89ffbc158940a7334680e66d81cc196001cf660d08251ba751",
           "minOSVersion": "18.6"
         }
       ],
