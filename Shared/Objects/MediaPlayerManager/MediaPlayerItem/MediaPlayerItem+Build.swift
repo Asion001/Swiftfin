@@ -67,7 +67,10 @@ extension MediaPlayerItem {
 
         #if os(iOS)
         let deviceProfile = if item.mediaType == .audio || item.type == .audio {
-            DeviceProfile.audioPlayer(maxBitrate: maxBitrate)
+            DeviceProfile.audioPlayer(
+                for: Defaults[.MusicPlayer.playerType],
+                maxBitrate: maxBitrate
+            )
         } else {
             DeviceProfile.build(
                 for: videoPlayerType,

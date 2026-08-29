@@ -57,7 +57,7 @@ struct MusicTrackContentGroup: ContentGroup {
                 .clipShape(.rect(cornerRadius: 12, style: .continuous))
                 .edgePadding(.horizontal)
             } header: {
-                Text(L10n.audio)
+                Text(L10n.songs)
                     .font(.title3)
                     .fontWeight(.semibold)
                     .edgePadding(.horizontal)
@@ -74,7 +74,7 @@ struct MusicTrackContentGroup: ContentGroup {
 
         private var artists: String? {
             guard let artists = item.artists?.joined(separator: ", "), artists.isNotEmpty else {
-                return nil
+                return item.albumArtist
             }
 
             return artists

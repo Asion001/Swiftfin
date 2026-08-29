@@ -12,36 +12,79 @@ import JellyfinAPI
 extension DeviceProfile {
 
     #if os(iOS)
-    static func audioPlayer(maxBitrate: Int? = nil) -> DeviceProfile {
+    static func audioPlayer(
+        for playerType: MusicPlayerType,
+        maxBitrate: Int? = nil
+    ) -> DeviceProfile {
         var deviceProfile = DeviceProfile()
 
-        deviceProfile.directPlayProfiles = [
-            DirectPlayProfile(
-                audioCodec: "aac",
-                container: "aac",
-                type: .audio
-            ),
-            DirectPlayProfile(
-                audioCodec: "flac",
-                container: "flac",
-                type: .audio
-            ),
-            DirectPlayProfile(
-                audioCodec: "aac,ac3,alac,eac3,mp3",
-                container: "m4a,m4b,mov,mp4",
-                type: .audio
-            ),
-            DirectPlayProfile(
-                audioCodec: "mp3",
-                container: "mp3",
-                type: .audio
-            ),
-            DirectPlayProfile(
-                audioCodec: "pcm_mulaw,pcm_s16be,pcm_s16le,pcm_s24be,pcm_s24le",
-                container: "wav",
-                type: .audio
-            ),
-        ]
+        deviceProfile.directPlayProfiles = switch playerType {
+        case .native:
+            [
+                DirectPlayProfile(
+                    audioCodec: "aac",
+                    container: "aac",
+                    type: .audio
+                ),
+                DirectPlayProfile(
+                    audioCodec: "flac",
+                    container: "flac",
+                    type: .audio
+                ),
+                DirectPlayProfile(
+                    audioCodec: "aac,ac3,alac,eac3,mp3",
+                    container: "m4a,m4b,mov,mp4",
+                    type: .audio
+                ),
+                DirectPlayProfile(
+                    audioCodec: "mp3",
+                    container: "mp3",
+                    type: .audio
+                ),
+                DirectPlayProfile(
+                    audioCodec: "pcm_mulaw,pcm_s16be,pcm_s16le,pcm_s24be,pcm_s24le",
+                    container: "wav",
+                    type: .audio
+                ),
+            ]
+        case .mpv:
+            [
+                DirectPlayProfile(type: .audio) {
+                    AudioCodec.aac
+                    AudioCodec.ac3
+                    AudioCodec.alac
+                    AudioCodec.amr_nb
+                    AudioCodec.amr_wb
+                    AudioCodec.dts
+                    AudioCodec.dts_hd
+                    AudioCodec.eac3
+                    AudioCodec.flac
+                    AudioCodec.mlp
+                    AudioCodec.mp1
+                    AudioCodec.mp2
+                    AudioCodec.mp3
+                    AudioCodec.nellymoser
+                    AudioCodec.opus
+                    AudioCodec.pcm_alaw
+                    AudioCodec.pcm_bluray
+                    AudioCodec.pcm_dvd
+                    AudioCodec.pcm_mulaw
+                    AudioCodec.pcm_s16be
+                    AudioCodec.pcm_s16le
+                    AudioCodec.pcm_s24be
+                    AudioCodec.pcm_s24le
+                    AudioCodec.pcm_u8
+                    AudioCodec.speex
+                    AudioCodec.truehd
+                    AudioCodec.vorbis
+                    AudioCodec.wavpack
+                    AudioCodec.wmalossless
+                    AudioCodec.wmapro
+                    AudioCodec.wmav1
+                    AudioCodec.wmav2
+                },
+            ]
+        }
         deviceProfile.transcodingProfiles = [
             TranscodingProfile(
                 protocol: .http,

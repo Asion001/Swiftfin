@@ -108,9 +108,12 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                         provider: ItemTypeContentGroupProvider(
                             itemTypes: [
                                 BaseItemKind.movie,
+                                .audio,
                                 .series,
                                 .boxSet,
                                 .episode,
+                                .musicAlbum,
+                                .musicArtist,
                                 .musicVideo,
                                 .video,
                                 .liveTvProgram,
@@ -136,9 +139,12 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                         provider: ItemTypeContentGroupProvider(
                             itemTypes: [
                                 BaseItemKind.movie,
+                                .audio,
                                 .series,
                                 .boxSet,
                                 .episode,
+                                .musicAlbum,
+                                .musicArtist,
                                 .musicVideo,
                                 .video,
                                 .liveTvProgram,

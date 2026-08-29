@@ -25,7 +25,8 @@ struct MusicTrackLibrary: BaseItemKindLibrary {
         var parameters = Paths.GetItemsParameters()
         parameters.enableUserData = true
         parameters.fields = .MinimumFields
-//        parameters.isRecursive = true
+        parameters.isRecursive = true
+        parameters.includeItemTypes = [.audio]
         parameters.parentID = parentID
         parameters.sortBy = [.album, .parentIndexNumber, .indexNumber, .sortName]
         parameters.sortOrder = [.ascending]

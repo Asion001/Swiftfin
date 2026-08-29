@@ -106,19 +106,24 @@ private struct MusicPlayerPopupView: View {
     private var artwork: UIImage?
     @State
     private var isQueuePresented = false
-    @StateObject
-    private var proxy: AVPlayerMusicMediaPlayerProxy
+    @LazyState
+    private var proxy: any MediaPlayerProxy
 
     init(
         manager: MediaPlayerManager,
         isPopupOpen: Binding<Bool>
     ) {
-        let proxy = AVPlayerMusicMediaPlayerProxy()
+        let proxy: any MediaPlayerProxy = switch Defaults[.MusicPlayer.playerType] {
+        case .native:
+            AVPlayerMusicMediaPlayerProxy()
+        case .mpv:
+            MPVMediaPlayerProxy(audioOnly: true)
+        }
 
         self._isPopupOpen = isPopupOpen
         self.manager = manager
         self.seconds = manager.secondsBox
-        self._proxy = StateObject(wrappedValue: proxy)
+        self._proxy = .init(wrappedValue: proxy)
     }
 
     private var artist: String? {
@@ -418,11 +423,11 @@ private struct MusicPlayerPlaybackProgress: View {
     @State
     private var sliderSize: CGSize = .zero
 
-    let proxy: AVPlayerMusicMediaPlayerProxy
+    let proxy: any MediaPlayerProxy
 
     init(
         manager: MediaPlayerManager,
-        proxy: AVPlayerMusicMediaPlayerProxy
+        proxy: any MediaPlayerProxy
     ) {
         self.manager = manager
         self.seconds = manager.secondsBox

@@ -112,7 +112,7 @@ struct MainTabView: View {
         #if os(tvOS)
             .background(alignment: .top) {
                 FocusedPosterCinematicBackgroundView()
-            }
+        }
         #endif
     }
 }

@@ -32,7 +32,7 @@ extension ItemView {
                 switch provider.item.type {
                 case .audio, .musicAlbum:
                     .square
-                case .person:
+                case .musicArtist, .person:
                     .portrait
                 default:
                     .landscape
