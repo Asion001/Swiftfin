@@ -197,8 +197,33 @@ extension VideoPlayer.UIVideoPlayerContainerViewController {
             }
         }
 
+        /// The menus sit over the picture with nothing behind them. Against a
+        /// bright scene the labels lose their contrast entirely, so the panel
+        /// carries its own ground — kept to the panel rather than laid over the
+        /// video, which is where subtitles are.
+        @ViewBuilder
+        private var background: some View {
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0), location: 0),
+                    .init(color: .black.opacity(0.55), location: 0.22),
+                    .init(color: .black.opacity(0.8), location: 0.5),
+                    .init(color: .black.opacity(0.88), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .isVisible(isPresentingOverlay && !isScrubbing)
+            .animation(.linear(duration: 0.25), value: isPresentingOverlay)
+            .animation(.linear(duration: 0.1), value: isScrubbing)
+        }
+
         var body: some View {
             ZStack {
+                background
+                    .allowsHitTesting(false)
+
                 #if os(iOS)
                 GestureView()
                     .environment(\.panGestureDirection, containerState.presentationControllerShouldDismiss ? .up : .vertical)

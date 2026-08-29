@@ -57,7 +57,8 @@ final class MPVPlaybackDiagnostics: ObservableObject {
 final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     MediaPlayerOffsetConfigurable,
     MediaPlayerSubtitleConfigurable,
-    MediaPlayerScreenshotCapturing
+    MediaPlayerScreenshotCapturing,
+    MediaPlayerZoomConfigurable
 {
     let isBuffering: PublishedBox<Bool> = .init(initialValue: false)
     let videoSize: PublishedBox<CGSize> = .init(initialValue: .zero)
@@ -95,6 +96,9 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     private var outputDroppedFrames = 0
     private var playbackItem: MediaPlayerItem?
     private var rateObserver: AnyCancellable?
+    private var displayHeight = 0
+    private var displayWidth = 0
+    private var isHoldingIdleTimer = false
     private var sourceHeight = 0
     private var sourceWidth = 0
     private var transferFunction: String?
@@ -114,6 +118,7 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
             managerStateObserver = manager?.$state
                 .sink { [weak self] state in
                     if state == .stopped {
+                        self?.holdIdleTimer(false)
                         self?.client.shutdown()
                     }
                 }
@@ -184,7 +189,27 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     }
 
     func setAspectFill(_ aspectFill: Bool) {
-        client.setAspectFill(aspectFill)
+        setZoomScale(aspectFill ? (fillZoomScale ?? 1) : 1)
+    }
+
+    /// Expressed to MPV as `video-zoom`, which is relative to the fitted size
+    /// and leaves `video-align-x`/`video-align-y` at zero — so the picture grows
+    /// about its centre and stays there.
+    ///
+    /// `panscan` is deliberately not used: it only spans fit to fill, and the
+    /// point here is to stop short of filling, or to go past it.
+    func setZoomScale(_ scale: CGFloat) {
+        client.setZoom(log2(max(0.01, Double(scale))))
+    }
+
+    var fillZoomScale: CGFloat? {
+        MPVZoomGeometry.fillScale(
+            video: CGSize(
+                width: displayWidth > 0 ? displayWidth : sourceWidth,
+                height: displayHeight > 0 ? displayHeight : sourceHeight
+            ),
+            surface: renderLayer.drawableSize
+        )
     }
 
     func setAudioOffset(_ seconds: Duration) {
@@ -284,6 +309,7 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     nonisolated func playerSurfaceDidDeinit() {
         Task { @MainActor [weak self] in
             guard let self, renderLayer.superlayer == nil else { return }
+            holdIdleTimer(false)
             client.shutdown()
         }
     }
@@ -384,6 +410,7 @@ private extension MPVMediaPlayerProxy {
             manager?.seconds = .seconds(seconds)
         case let ("pause", .bool(isPaused)):
             manager?.setPlaybackRequestStatus(status: isPaused ? .paused : .playing)
+            holdIdleTimer(!isPaused)
         case let ("paused-for-cache", .bool(isPausedForCache)):
             isBuffering.value = isPausedForCache
         case let ("width", .integer(width)):
@@ -392,6 +419,10 @@ private extension MPVMediaPlayerProxy {
         case let ("height", .integer(height)):
             sourceHeight = Int(height)
             updateVideoSize()
+        case let ("dwidth", .integer(width)):
+            displayWidth = Int(width)
+        case let ("dheight", .integer(height)):
+            displayHeight = Int(height)
         case let ("video-params/gamma", .string(gamma)):
             transferFunction = gamma
             updateDynamicRange()
@@ -410,6 +441,21 @@ private extension MPVMediaPlayerProxy {
         default:
             break
         }
+    }
+
+    /// Keeps the screen awake while MPV is playing.
+    ///
+    /// The other backends get this for free — VLCKit and AVPlayer each hold the
+    /// idle timer themselves — but MPV renders into a layer Swiftfin owns, and
+    /// nothing about drawing into a `CAMetalLayer` tells iOS that someone is
+    /// watching. Without this the display dims and locks mid-film.
+    ///
+    /// Only ever releases a hold it took, so it cannot clear one belonging to
+    /// something else.
+    func holdIdleTimer(_ shouldHold: Bool) {
+        guard shouldHold != isHoldingIdleTimer else { return }
+        isHoldingIdleTimer = shouldHold
+        UIApplication.shared.isIdleTimerDisabled = shouldHold
     }
 
     func updateVideoSize() {
@@ -450,6 +496,24 @@ private extension MPVMediaPlayerProxy {
             if: client.configuration.url.absoluteString.last == "/"
         )
         return client.url(path: path)
+    }
+}
+
+/// How far a picture has to be scaled past fitting a surface to fill it.
+///
+/// Separated from the proxy so it can be tested without a player: the value
+/// decides where the pinch gesture's detents sit, and getting it wrong makes
+/// "fill" land somewhere that does not fill.
+enum MPVZoomGeometry {
+
+    static func fillScale(video: CGSize, surface: CGSize) -> CGFloat? {
+        guard video.width > 0, video.height > 0, surface.width > 0, surface.height > 0 else { return nil }
+
+        let fit = min(surface.width / video.width, surface.height / video.height)
+        let fill = max(surface.width / video.width, surface.height / video.height)
+        guard fit > 0 else { return nil }
+
+        return fill / fit
     }
 }
 

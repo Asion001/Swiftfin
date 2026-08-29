@@ -183,6 +183,7 @@ final class MPVTests: XCTestCase {
         )
 
         XCTAssertTrue(supported.isMetalFXEnabled)
+        XCTAssertEqual(supported.options["dither-depth"], "no")
     }
 
     func testUpscalerOffAppliesNoShadersAndRestoresDefaultScalers() {
@@ -200,6 +201,7 @@ final class MPVTests: XCTestCase {
         /// previous tier's values applied.
         XCTAssertEqual(configuration.options["sigmoid-upscaling"], "no")
         XCTAssertEqual(configuration.options["scale"], "lanczos")
+        XCTAssertEqual(configuration.options["dither-depth"], "auto")
     }
 
     func testShaderTiersEscalateFromBuiltInScalingToCNNShaders() {
@@ -209,10 +211,14 @@ final class MPVTests: XCTestCase {
 
         /// The cheapest tier costs nothing beyond better built-in scaling.
         XCTAssertTrue(fast.shaders.isEmpty)
-        XCTAssertEqual(fast.options["scale"], "ewa_lanczossharp")
+        XCTAssertEqual(fast.options["scale"], "ewa_lanczos")
+        XCTAssertEqual(fast.options["scale-antiring"], "0.65")
+        XCTAssertEqual(fast.options["dither-depth"], "no")
 
         XCTAssertEqual(balanced.shaders, MPVShaderPreset.artCNNLight.shaderFileNames)
         XCTAssertEqual(quality.shaders, MPVShaderPreset.artCNNHeavy.shaderFileNames)
+        XCTAssertEqual(balanced.options["dither-depth"], "no")
+        XCTAssertEqual(quality.options["dither-depth"], "no")
     }
 
     /// Guards against an upstream rename silently producing an empty chain.
@@ -300,28 +306,44 @@ final class MPVTests: XCTestCase {
     private final class ClientSpy: MPVOptionConfigurable, @unchecked Sendable {
 
         private let lock = NSLock()
-        private var _options: [String: String] = [:]
-        private var _shaders: [String] = []
+        private var _application = MPVUpscaler.Application(
+            shaders: [],
+            options: [:],
+            isMetalFXEnabled: nil
+        )
+        private var _probeCount = 0
 
         var options: [String: String] {
-            lock.withLock { _options }
+            lock.withLock { _application.options }
         }
 
         var shaders: [String] {
-            lock.withLock { _shaders }
+            lock.withLock { _application.shaders }
         }
 
-        func setOption(name: String, value: String) {
-            lock.withLock { _options[name] = value }
+        var probeCount: Int {
+            lock.withLock { _probeCount }
         }
 
-        func setShaders(_ paths: [String]) {
-            lock.withLock { _shaders = paths }
+        func applyUpscaler(_ application: MPVUpscaler.Application) {
+            lock.withLock { _application = application }
         }
 
         func probeOption(named name: String, completion: @escaping @Sendable (Bool) -> Void) {
+            lock.withLock { _probeCount += 1 }
             completion(false)
         }
+    }
+
+    @MainActor
+    func testAttachingTheSameUpscalerClientTwiceDoesNotReprobeOrReapply() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+
+        controller.attach(to: spy)
+        controller.attach(to: spy)
+
+        XCTAssertEqual(spy.probeCount, 1)
     }
 
     @MainActor
@@ -336,9 +358,64 @@ final class MPVTests: XCTestCase {
         /// The cheapest tier is defined as better built-in scaling rather than
         /// a shader, so it is only distinguishable from Off by these options.
         XCTAssertTrue(spy.shaders.isEmpty)
-        XCTAssertEqual(spy.options["scale"], "ewa_lanczossharp")
-        XCTAssertEqual(spy.options["cscale"], "ewa_lanczossoft")
+        XCTAssertEqual(spy.options["scale"], "ewa_lanczos")
+        XCTAssertEqual(spy.options["cscale"], "ewa_lanczos")
+        XCTAssertEqual(spy.options["dither-depth"], "no")
         XCTAssertEqual(spy.options["sigmoid-upscaling"], "yes")
+    }
+
+    @MainActor
+    func testComparingShowsTheBaselineAndRestoresTheSelectionWithoutChangingIt() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+        controller.attach(to: spy)
+
+        controller.requestedProvider = .shader
+        controller.requestedMode = .balanced
+        let selected = spy.shaders
+        XCTAssertFalse(selected.isEmpty)
+
+        controller.setComparingBaseline(true)
+
+        /// Comparing has to reach the player — a control that only changes a
+        /// label proves nothing about the picture.
+        XCTAssertTrue(spy.shaders.isEmpty)
+        XCTAssertEqual(spy.options["scale"], "lanczos")
+
+        /// ...and it must not consume the selection it is being compared
+        /// against, or there would be nothing to go back to.
+        XCTAssertEqual(controller.requestedProvider, .shader)
+        XCTAssertEqual(controller.requestedMode, .balanced)
+
+        controller.setComparingBaseline(false)
+        XCTAssertEqual(spy.shaders, selected)
+    }
+
+    // MARK: - Zoom
+
+    func testFillZoomIsTheScaleThatTakesAWideFilmToTheScreenEdges() {
+        /// A 2.39:1 film on a 16:9 surface: fitting leaves bars, filling needs
+        /// the picture roughly a third wider than fitted.
+        let fill = MPVZoomGeometry.fillScale(
+            video: CGSize(width: 2390, height: 1000),
+            surface: CGSize(width: 1920, height: 1080)
+        )
+
+        XCTAssertNotNil(fill)
+        XCTAssertEqual(fill ?? 0, 1.344, accuracy: 0.001)
+
+        /// A film matching the surface is already filling it, so there is
+        /// nothing between the two detents to choose from.
+        XCTAssertEqual(
+            MPVZoomGeometry.fillScale(
+                video: CGSize(width: 1920, height: 1080),
+                surface: CGSize(width: 1920, height: 1080)
+            ) ?? 0,
+            1,
+            accuracy: 0.0001
+        )
+
+        XCTAssertNil(MPVZoomGeometry.fillScale(video: .zero, surface: CGSize(width: 100, height: 100)))
     }
 
     @MainActor
@@ -356,6 +433,7 @@ final class MPVTests: XCTestCase {
         XCTAssertTrue(spy.shaders.isEmpty)
         XCTAssertEqual(spy.options["scale"], "lanczos")
         XCTAssertEqual(spy.options["sigmoid-upscaling"], "no")
+        XCTAssertEqual(spy.options["dither-depth"], "auto")
     }
 
     @MainActor

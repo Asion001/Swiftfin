@@ -29,6 +29,11 @@ final class MPVUpscalerController: ObservableObject {
     @Published
     private(set) var missingShaders: [String] = []
 
+    /// Whether the unprocessed picture is being shown in place of the selection,
+    /// so the two can be compared without losing the selection to go back to.
+    @Published
+    private(set) var isComparingBaseline = false
+
     @Published
     var requestedProvider: VideoEnhancementProvider {
         didSet {
@@ -66,8 +71,23 @@ final class MPVUpscalerController: ObservableObject {
         }
     }
 
+    /// Shows, or stops showing, the picture with no upscaling applied.
+    ///
+    /// Deliberately does not touch `requestedProvider` or `requestedMode`: those
+    /// are the user's selection, they are persisted, and comparing against a
+    /// baseline should not overwrite them.
+    func setComparingBaseline(_ isComparing: Bool) {
+        guard isComparing != isComparingBaseline else { return }
+        isComparingBaseline = isComparing
+        apply()
+    }
+
     /// A short description of what is actually running, for the stats page.
     var activeDescription: String {
+        if isComparingBaseline {
+            return VideoEnhancementMode.off.displayTitle
+        }
+
         guard let activeLevel else {
             return VideoEnhancementMode.off.displayTitle
         }
@@ -106,6 +126,12 @@ final class MPVUpscalerController: ObservableObject {
     /// The probe is queued behind the client's initialization on its own serial
     /// queue, so it observes a fully initialized handle.
     func attach(to client: any MPVOptionConfigurable) {
+        if let attachedClient = self.client,
+           ObjectIdentifier(attachedClient) == ObjectIdentifier(client)
+        {
+            return
+        }
+
         self.client = client
 
         client.probeOption(named: MPVUpscaler.metalFXOptionName) { [weak self] isSupported in
@@ -119,11 +145,13 @@ final class MPVUpscalerController: ObservableObject {
     func apply() {
         guard let client else { return }
 
-        let configuration = MPVUpscaler.configuration(
-            provider: requestedProvider,
-            level: activeLevel,
-            isMetalFXSupported: isMetalFXSupported
-        )
+        let configuration = isComparingBaseline
+            ? MPVUpscaler.Configuration.disabled
+            : MPVUpscaler.configuration(
+                provider: requestedProvider,
+                level: activeLevel,
+                isMetalFXSupported: isMetalFXSupported
+            )
 
         var missing: [String] = []
         let shaderPaths = configuration.shaders.compactMap { name -> String? in
@@ -136,20 +164,12 @@ final class MPVUpscalerController: ObservableObject {
         }
 
         missingShaders = missing
-        client.setShaders(shaderPaths)
-
-        // libplacebo's own scaling settings. Every tier sends the full set so
-        // switching away from a tier restores the defaults instead of leaving
-        // the previous tier's values applied.
-        for (name, value) in configuration.options.sorted(by: { $0.key < $1.key }) {
-            client.setOption(name: name, value: value)
-        }
-
-        guard isMetalFXSupported else { return }
-
-        client.setOption(
-            name: MPVUpscaler.metalFXOptionName,
-            value: configuration.isMetalFXEnabled ? "yes" : "no"
+        client.applyUpscaler(
+            .init(
+                shaders: shaderPaths,
+                options: configuration.options,
+                isMetalFXEnabled: isMetalFXSupported ? configuration.isMetalFXEnabled : nil
+            )
         )
     }
 }

@@ -151,6 +151,8 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                 }
             }
             .presentationDetents([.medium])
+            .presentationBackground(Color.black.opacity(0.96))
+            .preferredColorScheme(.dark)
         }
     }
 }

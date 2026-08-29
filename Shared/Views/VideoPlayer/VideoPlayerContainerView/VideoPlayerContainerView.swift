@@ -357,6 +357,9 @@ extension VideoPlayer {
         }
 
         // TODO: don't force unwrap optional, sometimes gets into weird state
+        /// Extensions cannot store, and the pinch handler lives in one.
+        var zoomScaleAtGestureStart: CGFloat?
+
         private var lastVerticalPanLocation: CGPoint?
         private var verticalPanGestureStartConstant: CGFloat?
         private var isPanning: Bool = false
