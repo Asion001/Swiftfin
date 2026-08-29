@@ -86,8 +86,10 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         }
 
         switch item.type {
+        #if os(iOS)
         case .musicAlbum:
             MusicTrackContentGroup(parent: item)
+        #endif
         case .season, .series:
             SeriesEpisodeContentGroup(
                 parent: item,
@@ -106,20 +108,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                 router.route(
                     to: .contentGroup(
                         provider: ItemTypeContentGroupProvider(
-                            itemTypes: [
-                                BaseItemKind.movie,
-                                .audio,
-                                .series,
-                                .boxSet,
-                                .episode,
-                                .musicAlbum,
-                                .musicArtist,
-                                .musicVideo,
-                                .video,
-                                .liveTvProgram,
-                                .tvChannel,
-                                .person,
-                            ],
+                            itemTypes: Self.browsableItemTypes,
                             parent: BaseItemDto(name: element.displayTitle),
                             environment: .init(filters: .init(genres: [element]))
                         )
@@ -137,20 +126,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                 router.route(
                     to: .contentGroup(
                         provider: ItemTypeContentGroupProvider(
-                            itemTypes: [
-                                BaseItemKind.movie,
-                                .audio,
-                                .series,
-                                .boxSet,
-                                .episode,
-                                .musicAlbum,
-                                .musicArtist,
-                                .musicVideo,
-                                .video,
-                                .liveTvProgram,
-                                .tvChannel,
-                                .person,
-                            ],
+                            itemTypes: Self.browsableItemTypes,
                             parent: BaseItemDto(id: element.id, name: element.displayTitle, type: .studio)
                         )
                     )
@@ -388,8 +364,29 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         return response.value.items?.first
     }
 
+    /// Music is only browsable where it is playable.
+    private static var browsableItemTypes: [BaseItemKind] {
+        let itemTypes: [BaseItemKind] = [
+            .movie,
+            .series,
+            .boxSet,
+            .episode,
+            .musicVideo,
+            .video,
+            .liveTvProgram,
+            .tvChannel,
+            .person,
+        ]
+
+        #if os(iOS)
+        return itemTypes.appending([.audio, .musicAlbum, .musicArtist])
+        #else
+        return itemTypes
+        #endif
+    }
+
     private func firstAudioItem(for item: BaseItemDto) async throws -> BaseItemDto? {
-        let library = MusicTrackLibrary(parent: item)
+        let library = MusicTrackLibrary(parent: item, limit: 1)
         let pageState = try LibraryPageState(
             pageOffset: 0,
             pageSize: 1,

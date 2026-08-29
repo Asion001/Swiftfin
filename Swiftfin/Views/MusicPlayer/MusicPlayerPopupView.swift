@@ -27,6 +27,12 @@ private struct MusicPlayerPopupModifier: ViewModifier {
     @State
     private var manager: MediaPlayerManager?
 
+    /// The proxy is owned here rather than by the popup so that playback starts
+    /// with the mini player and survives the popup being collapsed.
+    /// `MediaPlayerManager.proxy` is weak, so this is its only strong reference.
+    @State
+    private var proxy: (any MediaPlayerProxy)?
+
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -37,6 +43,7 @@ private struct MusicPlayerPopupModifier: ViewModifier {
                         stop: {
                             manager.stop()
                             self.manager = nil
+                            self.proxy = nil
                             isPopupOpen = false
                         }
                     )
@@ -45,9 +52,10 @@ private struct MusicPlayerPopupModifier: ViewModifier {
                 }
             }
             .sheet(isPresented: $isPopupOpen) {
-                if let manager {
+                if let manager, let proxy {
                     MusicPlayerPopupView(
                         manager: manager,
+                        proxy: proxy,
                         isPopupOpen: $isPopupOpen
                     )
                     .id(ObjectIdentifier(manager))
@@ -64,13 +72,36 @@ private struct MusicPlayerPopupModifier: ViewModifier {
 
         if let newManager, newManager.item.type == .audio {
             manager = newManager
+
+            if previousManager !== newManager {
+                attachProxy(to: newManager)
+            }
         } else {
             manager = nil
+            proxy = nil
             isPopupOpen = false
         }
 
         if let previousManager, let newManager, previousManager !== newManager {
             previousManager.stop()
+        }
+    }
+
+    /// Builds the backend for this manager and begins playback, so that a track
+    /// selected from a library plays without the popup ever being opened.
+    private func attachProxy(to manager: MediaPlayerManager) {
+        let newProxy: any MediaPlayerProxy = switch Defaults[.MusicPlayer.playerType] {
+        case .native:
+            AVPlayerMusicMediaPlayerProxy()
+        case .mpv:
+            MPVMediaPlayerProxy(audioOnly: true)
+        }
+
+        proxy = newProxy
+        manager.proxy = newProxy
+
+        if manager.state == .loadingItem, manager.playbackItem == nil {
+            manager.start()
         }
     }
 }
@@ -220,23 +251,17 @@ private struct MusicPlayerPopupView: View {
 
     @State
     private var isQueuePresented = false
-    @LazyState
-    private var proxy: any MediaPlayerProxy
+
+    private let proxy: any MediaPlayerProxy
 
     init(
         manager: MediaPlayerManager,
+        proxy: any MediaPlayerProxy,
         isPopupOpen: Binding<Bool>
     ) {
-        let proxy: any MediaPlayerProxy = switch Defaults[.MusicPlayer.playerType] {
-        case .native:
-            AVPlayerMusicMediaPlayerProxy()
-        case .mpv:
-            MPVMediaPlayerProxy(audioOnly: true)
-        }
-
         self._isPopupOpen = isPopupOpen
         self.manager = manager
-        self._proxy = .init(wrappedValue: proxy)
+        self.proxy = proxy
     }
 
     private var artist: String? {
@@ -443,12 +468,6 @@ private struct MusicPlayerPopupView: View {
                 .trackingFrame(for: .scrollView)
             }
             .background(resolvedColor)
-        }
-        .onAppear {
-            manager.proxy = proxy
-            if manager.state == .loadingItem, manager.playbackItem == nil {
-                manager.start()
-            }
         }
         .sheet(isPresented: $isQueuePresented) {
             queueSheet

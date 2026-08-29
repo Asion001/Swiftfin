@@ -14,6 +14,12 @@ struct MusicTrackLibrary: BaseItemKindLibrary {
     let libraryItemTypes: [BaseItemKind] = [.audio]
     let parent: BaseItemDto
 
+    /// Caps how many tracks are requested. `nil` asks for the parent's whole
+    /// track list, which is what the album view and the playback queue need;
+    /// callers that only want the first track pass a bound so an artist's
+    /// entire discography is not fetched to read one item.
+    var limit: Int?
+
     func retrievePage(
         environment: Empty,
         pageState: LibraryPageState
@@ -26,6 +32,7 @@ struct MusicTrackLibrary: BaseItemKindLibrary {
         parameters.enableUserData = true
         parameters.isRecursive = true
         parameters.includeItemTypes = [.audio]
+        parameters.limit = limit
         parameters.parentID = parentID
         parameters.sortBy = [.album, .parentIndexNumber, .indexNumber, .sortName]
         parameters.sortOrder = [.ascending]
