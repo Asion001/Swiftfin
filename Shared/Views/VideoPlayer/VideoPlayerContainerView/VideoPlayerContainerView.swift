@@ -241,12 +241,38 @@ extension VideoPlayer {
             max(totalHeight * 0.6, 300) + EdgeInsets.edgePadding * 2
         }
 
-        private var regularSupplementContainerOffset: CGFloat {
+        private func regularSupplementContainerOffset(_ totalHeight: CGFloat) -> CGFloat {
             if UIDevice.isTV {
-                view.bounds.height / 3 + EdgeInsets.edgePadding * 2
+                totalHeight / 3 + EdgeInsets.edgePadding * 2
             } else {
                 200.0 + EdgeInsets.edgePadding * 2
             }
+        }
+
+        private func supplementContainerOffset(
+            for totalHeight: CGFloat,
+            isCompact: Bool? = nil
+        ) -> CGFloat {
+            let isCompact = isCompact ?? containerState.isCompact
+            let regularOffset = isCompact
+                ? compactSupplementContainerOffset(totalHeight)
+                : regularSupplementContainerOffset(totalHeight)
+
+            guard !isCompact,
+                  presentedSupplementStyle == .expanded
+            else {
+                return regularOffset
+            }
+
+            return totalHeight
+        }
+
+        private var presentedSupplementStyle: MediaPlayerSupplementPresentationStyle? {
+            #if os(tvOS)
+            containerState.presentedSupplementStyle
+            #else
+            containerState.selectedSupplement?.presentationStyle
+            #endif
         }
 
         private var dismissedSupplementContainerOffset: CGFloat {
@@ -268,11 +294,14 @@ extension VideoPlayer {
         private var supplementBottomAnchor: NSLayoutConstraint?
 
         private var centerOffset: CGFloat {
-            guard containerState.isCompact, let supplementBottomAnchor else {
+            guard containerState.isCompact,
+                  let supplementBottomAnchor,
+                  let supplementHeightAnchor
+            else {
                 return dismissedSupplementContainerOffset
             }
 
-            let supplementContainerHeight = compactSupplementContainerOffset(view.bounds.height)
+            let supplementContainerHeight = supplementHeightAnchor.constant
             let offsetPercentage = 1 - clamp(supplementBottomAnchor.constant.magnitude / supplementContainerHeight, min: 0, max: 1)
             let offset = (dismissedSupplementContainerOffset + EdgeInsets.edgePadding) * offsetPercentage
 
@@ -280,10 +309,13 @@ extension VideoPlayer {
         }
 
         private var compactPlayerBottomOffset: CGFloat {
-            guard containerState.isCompact, let supplementBottomAnchor else {
+            guard containerState.isCompact,
+                  let supplementBottomAnchor,
+                  let supplementHeightAnchor
+            else {
                 return dismissedSupplementContainerOffset
             }
-            let supplementContainerHeight = compactSupplementContainerOffset(view.bounds.height)
+            let supplementContainerHeight = supplementHeightAnchor.constant
             let offsetPercentage = 1 - clamp(supplementBottomAnchor.constant.magnitude / supplementContainerHeight, min: 0, max: 1)
             return (dismissedSupplementContainerOffset + EdgeInsets.edgePadding) * offsetPercentage
         }
@@ -339,7 +371,10 @@ extension VideoPlayer {
             location: CGPoint,
             state: UIGestureRecognizer.State
         ) {
-            guard let supplementBottomAnchor, let playerCompactBottomAnchor else { return }
+            guard let supplementBottomAnchor,
+                  let supplementHeightAnchor,
+                  let playerCompactBottomAnchor
+            else { return }
 
             let yDirection: CGFloat = translation.y > 0 ? -1 : 1
             let newOffset: CGFloat
@@ -415,19 +450,11 @@ extension VideoPlayer {
                 newOffset = verticalPanGestureStartConstant - (translation.y.magnitude * yDirection)
             }
 
-            if containerState.isCompact {
-                clampedOffset = clamp(
-                    newOffset,
-                    min: -compactSupplementContainerOffset(view.bounds.height),
-                    max: -dismissedSupplementContainerOffset
-                )
-            } else {
-                clampedOffset = clamp(
-                    newOffset,
-                    min: -regularSupplementContainerOffset,
-                    max: -dismissedSupplementContainerOffset
-                )
-            }
+            clampedOffset = clamp(
+                newOffset,
+                min: -supplementHeightAnchor.constant,
+                max: -dismissedSupplementContainerOffset
+            )
 
             if newOffset < clampedOffset {
                 let excess = clampedOffset - newOffset
@@ -449,17 +476,25 @@ extension VideoPlayer {
 
         func presentSupplementContainer(
             _ didPresent: Bool,
-            with panningState: (translation: CGFloat, velocity: CGFloat)? = nil
+            with panningState: (translation: CGFloat, velocity: CGFloat)? = nil,
+            presentationStyle: MediaPlayerSupplementPresentationStyle? = nil
         ) {
             guard !isPanning else { return }
-            guard let supplementBottomAnchor, let playerCompactBottomAnchor else { return }
+            guard let supplementBottomAnchor,
+                  let supplementHeightAnchor,
+                  let playerCompactBottomAnchor
+            else { return }
+
+            #if os(tvOS)
+            if !didPresent || presentationStyle != nil {
+                containerState.setPresentedSupplementStyle(didPresent ? presentationStyle : nil)
+            }
+            #endif
 
             if didPresent {
-                if containerState.isCompact {
-                    supplementBottomAnchor.constant = -compactSupplementContainerOffset(view.bounds.size.height)
-                } else {
-                    supplementBottomAnchor.constant = -regularSupplementContainerOffset
-                }
+                let presentedOffset = supplementContainerOffset(for: view.bounds.height)
+                supplementHeightAnchor.constant = presentedOffset
+                supplementBottomAnchor.constant = -presentedOffset
             } else {
                 supplementBottomAnchor.constant = -dismissedSupplementContainerOffset
             }
@@ -605,9 +640,10 @@ extension VideoPlayer {
             )
             supplementBottomAnchor = bottomAnchor
 
-            let constant = isCompact ?
-                compactSupplementContainerOffset(view.bounds.height) :
-                regularSupplementContainerOffset
+            let constant = supplementContainerOffset(
+                for: view.bounds.height,
+                isCompact: isCompact
+            )
             let heightAnchor = supplementContainerView.heightAnchor.constraint(equalToConstant: constant)
             supplementHeightAnchor = heightAnchor
 
@@ -661,21 +697,22 @@ extension VideoPlayer {
                   let playerCompactBottomAnchor
             else { return }
 
+            let presentedOffset = supplementContainerOffset(
+                for: newSize.height,
+                isCompact: isCompact
+            )
+
             if isCompact {
                 NSLayoutConstraint.deactivate(playerRegularConstraints)
                 NSLayoutConstraint.activate(playerCompactConstraints)
-
-                supplementBottomAnchor.constant = containerState
-                    .isPresentingSupplement ? -compactSupplementContainerOffset(newSize.height) : -dismissedSupplementContainerOffset
-                supplementHeightAnchor.constant = compactSupplementContainerOffset(newSize.height)
             } else {
                 NSLayoutConstraint.deactivate(playerCompactConstraints)
                 NSLayoutConstraint.activate(playerRegularConstraints)
-
-                supplementBottomAnchor.constant = containerState
-                    .isPresentingSupplement ? -regularSupplementContainerOffset : -dismissedSupplementContainerOffset
-                supplementHeightAnchor.constant = regularSupplementContainerOffset
             }
+
+            supplementBottomAnchor.constant = containerState
+                .isPresentingSupplement ? -presentedOffset : -dismissedSupplementContainerOffset
+            supplementHeightAnchor.constant = presentedOffset
 
             playerCompactBottomAnchor.constant = compactPlayerBottomOffset
             containerState.centerOffsetBox.value = centerOffset

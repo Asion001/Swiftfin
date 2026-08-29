@@ -133,10 +133,10 @@ struct EnhancedSubtitleSettingsView: View {
                 }
 
                 Section(
-                    String(localized: "subtitle.appearance", defaultValue: "Appearance")
+                    String(enhancedLocalized: "subtitle.appearance", defaultValue: "Appearance")
                 ) {
                     Picker(
-                        String(localized: "subtitle.position", defaultValue: "Subtitle position"),
+                        String(enhancedLocalized: "subtitle.position", defaultValue: "Subtitle position"),
                         selection: $subtitleConfiguration.position
                     ) {
                         ForEach(SubtitlePosition.allCases, id: \.rawValue) { position in
@@ -161,14 +161,14 @@ struct EnhancedSubtitleSettingsView: View {
                         step: 5
                     ) {
                         LabeledContent(
-                            String(localized: "subtitle.vertical-offset", defaultValue: "Vertical adjustment")
+                            String(enhancedLocalized: "subtitle.vertical-offset", defaultValue: "Vertical adjustment")
                         ) {
                             Text(verbatim: "\(subtitleConfiguration.verticalOffset) pt")
                         }
                     }
 
                     Button(
-                        String(localized: "subtitle.position.reset", defaultValue: "Reset subtitle position"),
+                        String(enhancedLocalized: "subtitle.position.reset", defaultValue: "Reset subtitle position"),
                         systemImage: "arrow.counterclockwise"
                     ) {
                         subtitleConfiguration.position = .automatic

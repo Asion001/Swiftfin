@@ -36,6 +36,15 @@ extension NavigationRoute {
     #endif
 
     @MainActor
+    static var liveGuide: NavigationRoute {
+        NavigationRoute(
+            id: "liveGuide"
+        ) {
+            EPGView()
+        }
+    }
+
+    @MainActor
     static var liveTV: NavigationRoute {
         NavigationRoute(
             id: "liveTV",

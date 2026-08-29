@@ -29,6 +29,7 @@ final class MPVPlaybackDiagnostics: ObservableObject {
     private(set) var latestScreenshotURL: URL?
 
     func record(property name: String, value: MPVPropertyValue) {
+        guard properties[name] != value else { return }
         properties[name] = value
     }
 
@@ -65,6 +66,27 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     let diagnostics = MPVPlaybackDiagnostics()
     let upscaler: MPVUpscalerController
 
+    /// The layer MPV renders into, owned here rather than by the view.
+    ///
+    /// MPV is handed this layer once, as `wid`, and draws into that one for the
+    /// life of the context, so the layer has to outlive any particular view.
+    /// SwiftUI rebuilds the surface — opening a supplement is enough — and a
+    /// layer created per view meant every rebuild either stranded MPV on a layer
+    /// nothing was showing or forced the context to restart, which drops the
+    /// picture and tears the audio output down with it. Re-parenting one layer
+    /// costs nothing and MPV never notices.
+    let renderLayer: MPVMetalLayer = {
+        let layer = MPVMetalLayer()
+        layer.device = MTLCreateSystemDefaultDevice()
+        layer.isOpaque = true
+        layer.backgroundColor = UIColor.black.cgColor
+        layer.contentsScale = UIScreen.main.nativeScale
+        layer.pixelFormat = .bgra8Unorm
+        /// Raised once MPV reports an HDR transfer function.
+        layer.wantsExtendedDynamicRangeContent = false
+        return layer
+    }()
+
     private let client: MPVClientCore
     private let configurationStore: MPVConfigurationStore
     private var decoderDroppedFrames = 0
@@ -75,7 +97,6 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     private var rateObserver: AnyCancellable?
     private var sourceHeight = 0
     private var sourceWidth = 0
-    private weak var metalLayer: CAMetalLayer?
     private var transferFunction: String?
     private var signalPeak: Double = 1
 
@@ -224,10 +245,10 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         )
     }
 
-    func takeScreenshot(includeSubtitles: Bool = true) throws -> URL {
+    func takeScreenshot(includeSubtitles: Bool = true) async throws -> URL {
         try configurationStore.prepare()
         let url = configurationStore.screenshotURL()
-        client.takeScreenshot(to: url, includeSubtitles: includeSubtitles)
+        try await client.takeScreenshot(to: url, includeSubtitles: includeSubtitles)
         diagnostics.record(screenshot: url)
         return url
     }
@@ -245,30 +266,26 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         return signalPeak > 1
     }
 
-    func attach(to layer: CAMetalLayer) {
-        /// A second layer means the surface was rebuilt under a context that was
-        /// already running. The context restarts against the new layer, so the
-        /// file it was playing has to be opened again, from where it had got to.
-        let isReplacingLayer = metalLayer != nil && metalLayer !== layer
-
-        metalLayer = layer
-        client.attach(to: layer)
+    func attach() {
+        client.attach(to: renderLayer)
         upscaler.attach(to: client)
         updateDynamicRange()
-
-        if isReplacingLayer, let playbackItem {
-            load(item: playbackItem, from: manager?.seconds ?? .zero)
-        }
     }
 
-    /// Ends the MPV context when the view that owns its layer is released.
+    /// Ends the MPV context once the surface is gone for good.
     ///
-    /// Playback used to be stopped only by the manager reaching `.stopped`. When
-    /// that did not reach the client the context stayed alive behind a dismissed
-    /// player — audible, invisible, and still holding a GPU context that the next
-    /// one had to start alongside.
-    nonisolated func playerSurfaceDidDeinit(layer: CAMetalLayer) {
-        client.shutdown(ownedBy: layer)
+    /// Deferred, because a rebuild releases the old view after the replacement
+    /// has already adopted the layer: if something has taken it by the time this
+    /// runs, the player is still on screen and the context is still wanted.
+    /// Playback used to be stopped only by the manager reaching `.stopped`, and
+    /// when that did not reach the client the context stayed alive behind a
+    /// dismissed player — audible, invisible, and still holding a GPU context
+    /// that the next one had to start alongside.
+    nonisolated func playerSurfaceDidDeinit() {
+        Task { @MainActor [weak self] in
+            guard let self, renderLayer.superlayer == nil else { return }
+            client.shutdown()
+        }
     }
 
     /// See `MPVClientCore.synchronizeWithLayerSize()`: MPV cannot notice that the
@@ -289,6 +306,13 @@ private extension MPVMediaPlayerProxy {
         playbackItem = item
         isBuffering.value = true
         diagnostics.record(log: "Loading \(item.url.lastPathComponent)")
+
+        // A stopped MPV context is intentionally destroyed. Re-attaching here
+        // makes a proxy that receives another item usable instead of leaving a
+        // queued URL with no context and presenting a black surface. This goes
+        // through `attach()` so the new context is configured exactly like a
+        // first attach, upscaler options included.
+        attach()
 
         let audioIndex = item.indexMap.playerIndex(for: item.selectedAudioStreamIndex)
         let subtitleIndex = item.indexMap.playerIndex(for: item.selectedSubtitleStreamIndex)
@@ -327,7 +351,12 @@ private extension MPVMediaPlayerProxy {
             diagnostics.record(log: message)
             manager?.logger.trace("MPV: \(message)")
         case let .property(name, value):
-            diagnostics.record(property: name, value: value)
+            // `time-pos` changes continuously and is already published by the
+            // media manager. Keeping a second copy in an @Published dictionary
+            // rebuilt the statistics view for every playback tick.
+            if name != "time-pos" {
+                diagnostics.record(property: name, value: value)
+            }
             handleProperty(name: name, value: value)
         case let .tracks(tracks):
             diagnostics.record(tracks: tracks)
@@ -390,7 +419,7 @@ private extension MPVMediaPlayerProxy {
     /// Requesting EDR headroom unconditionally makes SDR content wash out on
     /// some displays, so it follows the actual video parameters.
     func updateDynamicRange() {
-        metalLayer?.wantsExtendedDynamicRangeContent = isHighDynamicRange
+        renderLayer.wantsExtendedDynamicRangeContent = isHighDynamicRange
     }
 
     func updateDroppedFrames() {
@@ -438,9 +467,6 @@ private struct MPVPlayerSurface: UIViewRepresentable {
 }
 
 private final class MPVPlayerUIView: UIView {
-    override class var layerClass: AnyClass {
-        MPVMetalLayer.self
-    }
 
     private let proxy: MPVMediaPlayerProxy
 
@@ -451,16 +477,10 @@ private final class MPVPlayerUIView: UIView {
         backgroundColor = .black
         isOpaque = true
 
-        guard let metalLayer = layer as? CAMetalLayer else { return }
-        metalLayer.device = MTLCreateSystemDefaultDevice()
-        metalLayer.framebufferOnly = true
-        metalLayer.isOpaque = true
-        metalLayer.backgroundColor = UIColor.black.cgColor
-        metalLayer.contentsScale = UIScreen.main.nativeScale
-        metalLayer.pixelFormat = .bgra8Unorm
-        /// Raised by the proxy once MPV reports an HDR transfer function.
-        metalLayer.wantsExtendedDynamicRangeContent = false
-        proxy.attach(to: metalLayer)
+        /// Adding it to this layer removes it from whichever view held it
+        /// before, so a rebuilt surface adopts the running one.
+        layer.addSublayer(proxy.renderLayer)
+        proxy.attach()
     }
 
     @available(*, unavailable)
@@ -469,8 +489,7 @@ private final class MPVPlayerUIView: UIView {
     }
 
     deinit {
-        guard let metalLayer = layer as? CAMetalLayer else { return }
-        proxy.playerSurfaceDidDeinit(layer: metalLayer)
+        proxy.playerSurfaceDidDeinit()
     }
 
     override func layoutSubviews() {
@@ -479,7 +498,17 @@ private final class MPVPlayerUIView: UIView {
     }
 
     func updateDrawableSize() {
-        guard let metalLayer = layer as? CAMetalLayer else { return }
+        let metalLayer = proxy.renderLayer
+        guard metalLayer.superlayer === layer else { return }
+
+        /// Laying the layer out is not something to animate: an implicit
+        /// animation on its frame stretches the picture for the length of
+        /// whatever animation happens to be running.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+
+        metalLayer.frame = bounds
         metalLayer.contentsScale = window?.screen.nativeScale ?? UIScreen.main.nativeScale
 
         let drawableSize = CGSize(
@@ -503,7 +532,7 @@ private final class MPVPlayerUIView: UIView {
     }
 }
 
-private final class MPVMetalLayer: CAMetalLayer {
+final class MPVMetalLayer: CAMetalLayer {
     override var drawableSize: CGSize {
         get { super.drawableSize }
         set {

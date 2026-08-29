@@ -151,10 +151,6 @@ final class MPVUpscalerController: ObservableObject {
             name: MPVUpscaler.metalFXOptionName,
             value: configuration.isMetalFXEnabled ? "yes" : "no"
         )
-        client.setOption(
-            name: MPVUpscaler.metalFXSharpnessOptionName,
-            value: String(format: "%.2f", configuration.metalFXSharpness)
-        )
     }
 }
 #endif

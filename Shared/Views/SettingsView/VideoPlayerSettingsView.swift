@@ -406,7 +406,7 @@ struct VideoPlayerSettingsView: View {
 
             #if os(iOS)
             Picker(
-                String(localized: "subtitle.position", defaultValue: "Subtitle position"),
+                String(enhancedLocalized: "subtitle.position", defaultValue: "Subtitle position"),
                 selection: $subtitleConfiguration.position
             ) {
                 ForEach(SubtitlePosition.allCases, id: \.rawValue) { position in
@@ -421,7 +421,7 @@ struct VideoPlayerSettingsView: View {
                 step: 5
             ) {
                 LabeledContent(
-                    String(localized: "subtitle.vertical-offset", defaultValue: "Vertical adjustment")
+                    String(enhancedLocalized: "subtitle.vertical-offset", defaultValue: "Vertical adjustment")
                 ) {
                     Text(verbatim: "\(subtitleConfiguration.verticalOffset) pt")
                         .foregroundStyle(.secondary)
@@ -435,7 +435,7 @@ struct VideoPlayerSettingsView: View {
             #if os(iOS)
             Text(
                 String(
-                    localized: "subtitle.enhanced-disclaimer",
+                    enhancedLocalized: "subtitle.enhanced-disclaimer",
                     defaultValue: "Position and vertical adjustment apply to text subtitles in the Enhanced player. Image subtitles burned into the video cannot be moved."
                 )
             )

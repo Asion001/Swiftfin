@@ -61,7 +61,7 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable, SupportedCase
         switch self {
         #if os(iOS)
         case .mpv:
-            String(localized: "player.mpv", defaultValue: "MPV")
+            String(enhancedLocalized: "player.mpv", defaultValue: "MPV")
         #endif
         case .native:
             L10n.native
