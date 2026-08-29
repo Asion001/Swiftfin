@@ -23,6 +23,17 @@
       "versions": [
         {
           "version": "2026.8.29",
+          "buildVersion": "1788034390",
+          "marketingVersion": "Enhanced 2026.8.29 (1788034390)",
+          "date": "2026-08-29T20:13:10Z",
+          "localizedDescription": "Automated build from d6f9611. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.29-1788034390/Swiftfin-Enhanced.ipa",
+          "size": 196460881,
+          "sha256": "e651c1a466d1fa110daf41718fae844d457635c07ab243c9db18e4a876e0343a",
+          "minOSVersion": "18.6"
+        },
+        {
+          "version": "2026.8.29",
           "buildVersion": "1788013668",
           "marketingVersion": "Enhanced 2026.8.29 (1788013668)",
           "date": "2026-08-29T14:27:48Z",
@@ -228,17 +239,6 @@
           "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787497588/Swiftfin-Enhanced.ipa",
           "size": 183127357,
           "sha256": "507ad8cd2c3a0b89ffbc158940a7334680e66d81cc196001cf660d08251ba751",
-          "minOSVersion": "18.6"
-        },
-        {
-          "version": "2026.8.23",
-          "buildVersion": "1787493886",
-          "marketingVersion": "Enhanced 2026.8.23 (1787493886)",
-          "date": "2026-08-23T14:04:46Z",
-          "localizedDescription": "Automated build from 1f6512b with Anime4K Metal enhancement and current upstream Swiftfin changes.",
-          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787493886/Swiftfin-Enhanced.ipa",
-          "size": 183097241,
-          "sha256": "bc58fc83d2065e0f23354a8d0f83d4ace7aaaf49bf3fcdcffb1d5b8291acaca1",
           "minOSVersion": "18.6"
         }
       ],
