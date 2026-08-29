@@ -82,6 +82,20 @@ enum MPVUpscaler {
     /// is how `MPVUpscalerController` detects the patch.
     static let metalFXOptionName = "metalfx"
 
+    /// One complete renderer update.
+    ///
+    /// Keeping the shader list, scaler options, and MetalFX state together lets
+    /// `MPVClientCore` leave the old pipeline before installing the new one.
+    /// Applying these as unrelated property writes can render an intermediate
+    /// frame with both pipelines active while the user changes the picker.
+    struct Application: Equatable, Sendable {
+        var shaders: [String]
+        var options: [String: String]
+
+        /// `nil` means the running libmpv does not expose the MetalFX option.
+        var isMetalFXEnabled: Bool?
+    }
+
     /// The MPV options that realize a given upscaler selection.
     struct Configuration: Equatable {
 
@@ -94,7 +108,9 @@ enum MPVUpscaler {
         /// Whether the patched MetalFX pass should run.
         var isMetalFXEnabled = false
 
-        static let disabled = Configuration(options: Self.scalerOptions(isEnhanced: false))
+        static let disabled = Configuration(
+            options: Self.scalerOptions(isEnhanced: false, isActive: false)
+        )
     }
 
     static func configuration(
@@ -109,7 +125,7 @@ enum MPVUpscaler {
             guard isMetalFXSupported else { return .disabled }
 
             return Configuration(
-                options: Configuration.scalerOptions(isEnhanced: false),
+                options: Configuration.scalerOptions(isEnhanced: false, isActive: true),
                 isMetalFXEnabled: true
             )
         case .shader:
@@ -117,7 +133,10 @@ enum MPVUpscaler {
 
             return Configuration(
                 shaders: preset.shaderFileNames,
-                options: Configuration.scalerOptions(isEnhanced: preset == .builtIn)
+                options: Configuration.scalerOptions(
+                    isEnhanced: preset == .builtIn,
+                    isActive: true
+                )
             )
         }
     }
@@ -131,11 +150,20 @@ extension MPVUpscaler.Configuration {
     /// costs far less than a CNN pass while still beating the defaults. Every
     /// key is always present so switching tiers restores the defaults rather
     /// than leaving the previous tier's values applied.
-    static func scalerOptions(isEnhanced: Bool) -> [String: String] {
+    static func scalerOptions(isEnhanced: Bool, isActive: Bool) -> [String: String] {
         [
-            "scale": isEnhanced ? "ewa_lanczossharp" : "lanczos",
-            "cscale": isEnhanced ? "ewa_lanczossoft" : "lanczos",
+            // The sharp alias deliberately increases ringing. The neutral EWA
+            // filter plus anti-ringing keeps edges defined without turning
+            // grain and compression noise into a dotted outline.
+            "scale": isEnhanced ? "ewa_lanczos" : "lanczos",
+            "cscale": isEnhanced ? "ewa_lanczos" : "lanczos",
             "dscale": "mitchell",
+            "scale-antiring": isEnhanced ? "0.65" : "0",
+            "cscale-antiring": isEnhanced ? "0.65" : "0",
+            // MPV otherwise dithers SDR output to 8-bit. That is useful on a
+            // desktop monitor, but on a phone-sized image the stable noise is
+            // visible as dots and is magnified by both upscaling providers.
+            "dither-depth": isActive ? "no" : "auto",
             "sigmoid-upscaling": isEnhanced ? "yes" : "no",
         ]
     }

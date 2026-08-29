@@ -62,8 +62,7 @@ struct MPVTrack: Sendable, Equatable, Identifiable {
 /// concrete class makes impossible.
 protocol MPVOptionConfigurable: AnyObject, Sendable {
 
-    func setOption(name: String, value: String)
-    func setShaders(_ paths: [String])
+    func applyUpscaler(_ application: MPVUpscaler.Application)
     func probeOption(named name: String, completion: @escaping @Sendable (Bool) -> Void)
 }
 
@@ -107,6 +106,7 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     private var pendingURL: URL?
     private var pendingCommands: [UInt64: CheckedContinuation<Void, any Error>] = [:]
     private var tracks: [MPVTrack] = []
+    private var upscalerApplication: MPVUpscaler.Application?
 
     init(configurationStore: MPVConfigurationStore = .shared) {
         self.configurationStore = configurationStore
@@ -212,18 +212,16 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         }
     }
 
-    /// Replaces the active user shader chain.
+    /// Applies a complete upscaler selection in one turn of the client queue.
     ///
-    /// Uses `change-list` rather than assigning `glsl-shaders` directly so that
-    /// paths never have to be escaped against MPV's list separator.
-    func setShaders(_ paths: [String]) {
+    /// MetalFX is disabled first so no frame can enter the old MetalFX pass
+    /// while its shader/scaler inputs are being replaced. This also prevents a
+    /// burst of picker changes from interleaving partial configurations.
+    func applyUpscaler(_ application: MPVUpscaler.Application) {
         queue.async { [weak self] in
             guard let self else { return }
-            performCommand(["change-list", "glsl-shaders", "clr", ""])
-
-            for path in paths {
-                performCommand(["change-list", "glsl-shaders", "append", path])
-            }
+            upscalerApplication = application
+            applyUpscalerIfPossible(application)
         }
     }
 
@@ -392,7 +390,43 @@ private extension MPVClientCore {
             )
         }
 
+        if let upscalerApplication {
+            applyUpscalerIfPossible(upscalerApplication)
+        }
+
         loadPendingURLIfPossible()
+    }
+
+    func applyUpscalerIfPossible(_ application: MPVUpscaler.Application) {
+        guard let handle else { return }
+
+        if application.isMetalFXEnabled != nil {
+            reportIfFailed(
+                mpv_set_property_string(handle, MPVUpscaler.metalFXOptionName, "no"),
+                operation: "leave current MetalFX pipeline"
+            )
+        }
+
+        // `change-list` avoids escaping paths against MPV's list separator.
+        performCommand(["change-list", "glsl-shaders", "clr", ""])
+
+        for path in application.shaders {
+            performCommand(["change-list", "glsl-shaders", "append", path])
+        }
+
+        for (name, value) in application.options.sorted(by: { $0.key < $1.key }) {
+            reportIfFailed(
+                mpv_set_property_string(handle, name, value),
+                operation: "set \(name)"
+            )
+        }
+
+        if application.isMetalFXEnabled == true {
+            reportIfFailed(
+                mpv_set_property_string(handle, MPVUpscaler.metalFXOptionName, "yes"),
+                operation: "enter MetalFX pipeline"
+            )
+        }
     }
 
     func setPreInitializationOptions(

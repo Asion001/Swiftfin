@@ -185,6 +185,8 @@ struct VideoPlayer: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
             .presentationContentInteraction(.scrolls)
+            .presentationBackground(Color.black.opacity(0.96))
+            .preferredColorScheme(.dark)
         }
         #endif
     }

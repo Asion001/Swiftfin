@@ -183,6 +183,7 @@ final class MPVTests: XCTestCase {
         )
 
         XCTAssertTrue(supported.isMetalFXEnabled)
+        XCTAssertEqual(supported.options["dither-depth"], "no")
     }
 
     func testUpscalerOffAppliesNoShadersAndRestoresDefaultScalers() {
@@ -200,6 +201,7 @@ final class MPVTests: XCTestCase {
         /// previous tier's values applied.
         XCTAssertEqual(configuration.options["sigmoid-upscaling"], "no")
         XCTAssertEqual(configuration.options["scale"], "lanczos")
+        XCTAssertEqual(configuration.options["dither-depth"], "auto")
     }
 
     func testShaderTiersEscalateFromBuiltInScalingToCNNShaders() {
@@ -209,10 +211,14 @@ final class MPVTests: XCTestCase {
 
         /// The cheapest tier costs nothing beyond better built-in scaling.
         XCTAssertTrue(fast.shaders.isEmpty)
-        XCTAssertEqual(fast.options["scale"], "ewa_lanczossharp")
+        XCTAssertEqual(fast.options["scale"], "ewa_lanczos")
+        XCTAssertEqual(fast.options["scale-antiring"], "0.65")
+        XCTAssertEqual(fast.options["dither-depth"], "no")
 
         XCTAssertEqual(balanced.shaders, MPVShaderPreset.artCNNLight.shaderFileNames)
         XCTAssertEqual(quality.shaders, MPVShaderPreset.artCNNHeavy.shaderFileNames)
+        XCTAssertEqual(balanced.options["dither-depth"], "no")
+        XCTAssertEqual(quality.options["dither-depth"], "no")
     }
 
     /// Guards against an upstream rename silently producing an empty chain.
@@ -300,28 +306,44 @@ final class MPVTests: XCTestCase {
     private final class ClientSpy: MPVOptionConfigurable, @unchecked Sendable {
 
         private let lock = NSLock()
-        private var _options: [String: String] = [:]
-        private var _shaders: [String] = []
+        private var _application = MPVUpscaler.Application(
+            shaders: [],
+            options: [:],
+            isMetalFXEnabled: nil
+        )
+        private var _probeCount = 0
 
         var options: [String: String] {
-            lock.withLock { _options }
+            lock.withLock { _application.options }
         }
 
         var shaders: [String] {
-            lock.withLock { _shaders }
+            lock.withLock { _application.shaders }
         }
 
-        func setOption(name: String, value: String) {
-            lock.withLock { _options[name] = value }
+        var probeCount: Int {
+            lock.withLock { _probeCount }
         }
 
-        func setShaders(_ paths: [String]) {
-            lock.withLock { _shaders = paths }
+        func applyUpscaler(_ application: MPVUpscaler.Application) {
+            lock.withLock { _application = application }
         }
 
         func probeOption(named name: String, completion: @escaping @Sendable (Bool) -> Void) {
+            lock.withLock { _probeCount += 1 }
             completion(false)
         }
+    }
+
+    @MainActor
+    func testAttachingTheSameUpscalerClientTwiceDoesNotReprobeOrReapply() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+
+        controller.attach(to: spy)
+        controller.attach(to: spy)
+
+        XCTAssertEqual(spy.probeCount, 1)
     }
 
     @MainActor
@@ -336,8 +358,9 @@ final class MPVTests: XCTestCase {
         /// The cheapest tier is defined as better built-in scaling rather than
         /// a shader, so it is only distinguishable from Off by these options.
         XCTAssertTrue(spy.shaders.isEmpty)
-        XCTAssertEqual(spy.options["scale"], "ewa_lanczossharp")
-        XCTAssertEqual(spy.options["cscale"], "ewa_lanczossoft")
+        XCTAssertEqual(spy.options["scale"], "ewa_lanczos")
+        XCTAssertEqual(spy.options["cscale"], "ewa_lanczos")
+        XCTAssertEqual(spy.options["dither-depth"], "no")
         XCTAssertEqual(spy.options["sigmoid-upscaling"], "yes")
     }
 
@@ -356,6 +379,7 @@ final class MPVTests: XCTestCase {
         XCTAssertTrue(spy.shaders.isEmpty)
         XCTAssertEqual(spy.options["scale"], "lanczos")
         XCTAssertEqual(spy.options["sigmoid-upscaling"], "no")
+        XCTAssertEqual(spy.options["dither-depth"], "auto")
     }
 
     @MainActor

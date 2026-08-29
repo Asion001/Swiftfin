@@ -106,6 +106,12 @@ final class MPVUpscalerController: ObservableObject {
     /// The probe is queued behind the client's initialization on its own serial
     /// queue, so it observes a fully initialized handle.
     func attach(to client: any MPVOptionConfigurable) {
+        if let attachedClient = self.client,
+           ObjectIdentifier(attachedClient) == ObjectIdentifier(client)
+        {
+            return
+        }
+
         self.client = client
 
         client.probeOption(named: MPVUpscaler.metalFXOptionName) { [weak self] isSupported in
@@ -136,20 +142,12 @@ final class MPVUpscalerController: ObservableObject {
         }
 
         missingShaders = missing
-        client.setShaders(shaderPaths)
-
-        // libplacebo's own scaling settings. Every tier sends the full set so
-        // switching away from a tier restores the defaults instead of leaving
-        // the previous tier's values applied.
-        for (name, value) in configuration.options.sorted(by: { $0.key < $1.key }) {
-            client.setOption(name: name, value: value)
-        }
-
-        guard isMetalFXSupported else { return }
-
-        client.setOption(
-            name: MPVUpscaler.metalFXOptionName,
-            value: configuration.isMetalFXEnabled ? "yes" : "no"
+        client.applyUpscaler(
+            .init(
+                shaders: shaderPaths,
+                options: configuration.options,
+                isMetalFXEnabled: isMetalFXSupported ? configuration.isMetalFXEnabled : nil
+            )
         )
     }
 }
