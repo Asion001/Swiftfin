@@ -114,6 +114,12 @@ final class ServerSocketManager {
         while !Task.isCancelled {
             guard let userSession else { break }
 
+            #if os(iOS)
+            let playableMediaTypes: [MediaType] = [.audio, .video]
+            #else
+            let playableMediaTypes: [MediaType] = [.video]
+            #endif
+
             let session = userSession.client.socket(
                 supportsMediaControl: true,
                 supportedCommands: [
@@ -126,12 +132,7 @@ final class ServerSocketManager {
                     .setMaxStreamingBitrate,
                     .setSubtitleStreamIndex,
                 ],
-                playableMediaTypes: [
-                    #if os(iOS)
-                    .audio,
-                    #endif
-                        .video,
-                ]
+                playableMediaTypes: playableMediaTypes
             )
             .connect(responseTimeout: .seconds(10))
 

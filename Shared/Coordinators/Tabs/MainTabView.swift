@@ -90,9 +90,8 @@ struct MainTabView: View {
                 }
             }
         }
-        .tabBarMinimizeBehavior(.onScrollDown)
         #if os(tvOS)
-            .tabViewStyle(.sidebarAdaptable)
+        .tabViewStyle(.sidebarAdaptable)
         #endif
     }
 

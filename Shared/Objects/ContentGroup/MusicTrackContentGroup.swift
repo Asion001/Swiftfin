@@ -85,8 +85,10 @@ struct MusicTrackContentGroup: ContentGroup {
         }
 
         private func play() {
-            let provider = MediaPlayerItemProvider(item: item) { item in
-                try await MediaPlayerItem.build(for: item)
+            let provider = MediaPlayerItemProvider(item: item) { item, modifyItem in
+                try await MediaPlayerItem.build(for: item) { item in
+                    modifyItem?(&item)
+                }
             }
             let queue = MusicMediaPlayerQueue(item: item, parent: parent)
 

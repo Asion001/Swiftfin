@@ -33,7 +33,6 @@ struct LatestInLibrary: BaseItemKindLibrary {
     ) async throws -> [BaseItemDto] {
         var parameters = Paths.GetLatestMediaParameters()
         parameters.enableUserData = true
-        parameters.fields = .MinimumFields
         parameters.includeItemTypes = includedItemTypes
         parameters.limit = pageState.pageSize
         parameters.parentID = parent.id

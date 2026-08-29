@@ -8,7 +8,6 @@
 
 import Defaults
 import FactoryKit
-import LNPopupUI
 import SwiftUI
 
 extension View {
@@ -24,18 +23,28 @@ private struct MusicPlayerPopupModifier: ViewModifier {
     private var mediaPlayerManagerPublisher
 
     @State
-    private var isBarPresented = false
-    @State
     private var isPopupOpen = false
     @State
     private var manager: MediaPlayerManager?
 
     func body(content: Content) -> some View {
         content
-            .popup(
-                isBarPresented: $isBarPresented,
-                isPopupOpen: $isPopupOpen
-            ) {
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if let manager, !isPopupOpen {
+                    MusicPlayerMiniPlayer(
+                        manager: manager,
+                        openPlayer: { isPopupOpen = true },
+                        stop: {
+                            manager.stop()
+                            self.manager = nil
+                            isPopupOpen = false
+                        }
+                    )
+                    .id(ObjectIdentifier(manager))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .sheet(isPresented: $isPopupOpen) {
                 if let manager {
                     MusicPlayerPopupView(
                         manager: manager,
@@ -44,31 +53,9 @@ private struct MusicPlayerPopupModifier: ViewModifier {
                     .id(ObjectIdentifier(manager))
                 }
             }
-            .popupBarProgressViewStyle(.bottom)
-            .popupBarInheritsBottomBarMetrics(true)
-            .popupBarContextMenu(menuItems: {
-                Button {
-                    print("Context Menu Item 1")
-                } label: {
-                    Text("Context Menu Item 1")
-                    Image(systemName: "globe")
-                }
-
-                Button {
-                    print("Context Menu Item 2")
-                } label: {
-                    Text("Context Menu Item 2")
-                    Image(systemName: "location.circle")
-                }
-            })
+            .animation(.easeInOut(duration: 0.2), value: manager != nil)
             .onReceive(mediaPlayerManagerPublisher) { newManager in
                 receive(newManager)
-            }
-            .backport
-            .onChange(of: isBarPresented) { _, isPresented in
-                guard !isPresented else { return }
-                isPopupOpen = false
-                manager?.stop()
             }
     }
 
@@ -77,15 +64,146 @@ private struct MusicPlayerPopupModifier: ViewModifier {
 
         if let newManager, newManager.item.type == .audio {
             manager = newManager
-            isBarPresented = true
         } else {
             manager = nil
             isPopupOpen = false
-            isBarPresented = false
         }
 
         if let previousManager, let newManager, previousManager !== newManager {
             previousManager.stop()
+        }
+    }
+}
+
+private struct MusicPlayerMiniPlayer: View {
+
+    @ObservedObject
+    private var manager: MediaPlayerManager
+    @ObservedObject
+    private var seconds: PublishedBox<Duration>
+
+    @State
+    private var artwork: UIImage?
+
+    let openPlayer: () -> Void
+    let stop: () -> Void
+
+    init(
+        manager: MediaPlayerManager,
+        openPlayer: @escaping () -> Void,
+        stop: @escaping () -> Void
+    ) {
+        self.manager = manager
+        self.seconds = manager.secondsBox
+        self.openPlayer = openPlayer
+        self.stop = stop
+    }
+
+    private var artist: String? {
+        let artists = manager.item.artists?.joined(separator: ", ")
+        if let artists, artists.isNotEmpty {
+            return artists
+        }
+
+        return manager.item.albumArtist
+    }
+
+    private var progress: Double {
+        guard let runtime = manager.item.runtime?.seconds,
+              runtime.isFinite,
+              runtime > 0,
+              seconds.value.seconds.isFinite
+        else {
+            return 0
+        }
+
+        return clamp(seconds.value.seconds / runtime, min: 0, max: 1)
+    }
+
+    private var artworkTaskID: String {
+        manager.item.id ?? manager.item.displayTitle
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ProgressView(value: progress)
+                .progressViewStyle(.linear)
+
+            HStack(spacing: 12) {
+                Button(action: openPlayer) {
+                    HStack(spacing: 12) {
+                        Group {
+                            if let artwork {
+                                Image(uiImage: artwork)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                Image(systemName: "music.note")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(width: 46, height: 46)
+                        .background(.quaternary)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(manager.item.displayTitle)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+
+                            if let artist, artist.isNotEmpty {
+                                Text(artist)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    manager.togglePlayPause()
+                } label: {
+                    Image(systemName: manager.playbackRequestStatus == .playing ? "pause.fill" : "play.fill")
+                        .frame(width: 36, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(manager.playbackRequestStatus == .playing ? L10n.pause : L10n.play)
+
+                if let queue = manager.queue {
+                    MusicPlayerPopupNextButton(
+                        manager: manager,
+                        queue: queue
+                    )
+                }
+
+                Button(action: stop) {
+                    Image(systemName: "xmark")
+                        .frame(width: 32, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.close)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .background(.regularMaterial)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+        .task(id: artworkTaskID) {
+            let item = manager.item
+            artwork = nil
+            let newArtwork = await item.getNowPlayingImage()
+
+            guard !Task.isCancelled, manager.item.id == item.id else { return }
+            artwork = newArtwork
         }
     }
 }
@@ -99,11 +217,7 @@ private struct MusicPlayerPopupView: View {
     private var isPopupOpen: Bool
     @ObservedObject
     private var manager: MediaPlayerManager
-    @ObservedObject
-    private var seconds: PublishedBox<Duration>
 
-    @State
-    private var artwork: UIImage?
     @State
     private var isQueuePresented = false
     @LazyState
@@ -122,7 +236,6 @@ private struct MusicPlayerPopupView: View {
 
         self._isPopupOpen = isPopupOpen
         self.manager = manager
-        self.seconds = manager.secondsBox
         self._proxy = .init(wrappedValue: proxy)
     }
 
@@ -142,24 +255,6 @@ private struct MusicPlayerPopupView: View {
     private var album: String? {
         guard let album = manager.item.album, album.isNotEmpty else { return nil }
         return album
-    }
-
-    private var progress: Float? {
-        let activeSeconds = seconds.value.seconds
-        guard manager.state != .loadingItem,
-              let runtime = manager.item.runtime?.seconds,
-              runtime.isFinite,
-              runtime > 0,
-              activeSeconds.isFinite
-        else {
-            return nil
-        }
-
-        return Float(clamp(activeSeconds / runtime, min: 0, max: 1))
-    }
-
-    private var artworkTaskID: String {
-        manager.item.id ?? manager.item.displayTitle
     }
 
     @ViewBuilder
@@ -213,13 +308,6 @@ private struct MusicPlayerPopupView: View {
 
     @ViewBuilder
     private var albumArtwork: some View {
-//        PosterImage(
-//            item: manager.item,
-//            type: .square,
-//            size: .custom(width: 600),
-//            contentMode: .fit
-//        )
-
         ImageView(
             manager.item.squareImageSources(
                 environment: .init()
@@ -236,7 +324,6 @@ private struct MusicPlayerPopupView: View {
         .frame(maxWidth: 460)
         .scaleEffect(manager.playbackRequestStatus == .playing ? 1 : 0.92)
         .subtleShadow()
-        .popupTransitionTarget()
         .animation(
             .bouncy(duration: 0.4, extraBounce: 0.08),
             value: manager.playbackRequestStatus == .playing
@@ -322,7 +409,6 @@ private struct MusicPlayerPopupView: View {
             NavigationStack {
                 queue.videoPlayerBody
                     .navigationTitle(queue.displayTitle)
-                    .backport
                     .toolbarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
@@ -344,45 +430,19 @@ private struct MusicPlayerPopupView: View {
 
     var body: some View {
         NavigationStack {
-//        VStack(spacing: 0) {
-//            header
+            VStack(spacing: 0) {
+                header
 
-//            if horizontalSizeClass == .regular {
-//                ViewThatFits(in: .vertical) {
-//                    playerContent
-//                        .padding(EdgeInsets.edgePadding)
-//
-//                    ScrollView {
-//                        playerContent
-//                            .frame(maxWidth: .infinity)
-//                            .padding(EdgeInsets.edgePadding)
-//                    }
-//                }
-//                .frame(maxWidth: .infinity, maxHeight: .infinity)
-//            } else {
-            ScrollView {
-                playerContent
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, EdgeInsets.edgePadding)
-                    .padding(.top, EdgeInsets.edgePadding / 2)
-                    .padding(.bottom, EdgeInsets.edgePadding * 2)
+                ScrollView {
+                    playerContent
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, EdgeInsets.edgePadding)
+                        .padding(.top, EdgeInsets.edgePadding / 2)
+                        .padding(.bottom, EdgeInsets.edgePadding * 2)
+                }
+                .trackingFrame(for: .scrollView)
             }
-            .trackingFrame(for: .scrollView)
-            .background {
-                resolvedColor
-            }
-//            }
-        }
-        .popupItem {
-            PopupItem(
-                id: manager.item.id ?? manager.item.displayTitle,
-                verbatimTitle: manager.item.displayTitle,
-                verbatimSubtitle: artist,
-                image: artwork.map { Image(uiImage: $0) },
-                progress: progress
-            ) {
-                MusicPlayerPopupToolbarContent(manager: manager)
-            }
+            .background(resolvedColor)
         }
         .onAppear {
             manager.proxy = proxy
@@ -392,14 +452,6 @@ private struct MusicPlayerPopupView: View {
         }
         .sheet(isPresented: $isQueuePresented) {
             queueSheet
-        }
-        .task(id: artworkTaskID) {
-            let item = manager.item
-            artwork = nil
-            let newArtwork = await item.getNowPlayingImage()
-
-            guard !Task.isCancelled, manager.item.id == item.id else { return }
-            artwork = newArtwork
         }
     }
 }
@@ -618,13 +670,11 @@ private struct MusicPlayerPlaybackProgress: View {
                     .transition(.opacity.animation(.linear(duration: 0.1)))
             }
         }
-        .backport
-        .onChange(of: isSlowScrubbing) { _, isSlowScrubbing in
+        .onChange(of: isSlowScrubbing) {
             guard isSlowScrubbing else { return }
             UIDevice.impact(.soft)
         }
-        .backport
-        .onChange(of: manager.item.id) { _, _ in
+        .onChange(of: manager.item.id) {
             currentTranslation = .zero
             isScrubbing = false
             scrubbedSeconds = 0
@@ -874,32 +924,6 @@ private struct MusicPlayerNextButton: View {
         .buttonStyle(.plain)
         .disabled(queue.nextItem == nil || manager.state == .loadingItem)
         .accessibilityLabel(L10n.nextItem)
-    }
-}
-
-private struct MusicPlayerPopupToolbarContent: ToolbarContent {
-
-    @ObservedObject
-    var manager: MediaPlayerManager
-
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .popupBar) {
-            Button {
-                manager.togglePlayPause()
-            } label: {
-                Image(systemName: manager.playbackRequestStatus == .playing ? "pause.fill" : "play.fill")
-            }
-            .accessibilityLabel(manager.playbackRequestStatus == .playing ? L10n.pause : L10n.play)
-        }
-
-        if let queue = manager.queue {
-            ToolbarItem(placement: .popupBar) {
-                MusicPlayerPopupNextButton(
-                    manager: manager,
-                    queue: queue
-                )
-            }
-        }
     }
 }
 

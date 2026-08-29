@@ -157,14 +157,15 @@ final class MusicMediaPlayerQueue: ViewModel, MediaPlayerQueue {
     }
 
     private func makeProvider(for item: BaseItemDto) -> MediaPlayerItemProvider {
-        MediaPlayerItemProvider(item: item) { [weak self] item in
+        MediaPlayerItemProvider(item: item) { [weak self] item, modifyItem in
             let bitrate = await self?.manager?.playbackBitrate ?? Defaults[.VideoPlayer.Playback.appMaximumBitrate]
 
             return try await MediaPlayerItem.build(
                 for: item,
                 requestedBitrate: bitrate
-            ) {
-                $0.userData?.playbackPositionTicks = .zero
+            ) { item in
+                item.userData?.playbackPositionTicks = .zero
+                modifyItem?(&item)
             }
         }
     }
@@ -255,8 +256,7 @@ extension MusicMediaPlayerQueue {
                 .onAppear {
                     scrollToCurrent(with: scrollProxy)
                 }
-                .backport
-                .onChange(of: queue.currentItemID) { _, _ in
+                .onChange(of: queue.currentItemID) {
                     withAnimation {
                         scrollToCurrent(with: scrollProxy)
                     }

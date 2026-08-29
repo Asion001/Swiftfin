@@ -22,9 +22,8 @@ extension NavigationRoute {
         queue: (any MediaPlayerQueue)? = nil
     ) {
         let manager = MediaPlayerManager(
-            item: provider.item,
-            queue: queue,
-            mediaPlayerItemProvider: provider.function
+            provider: provider,
+            queue: queue
         )
 
         Container.shared.mediaPlayerManager.register {

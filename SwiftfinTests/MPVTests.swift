@@ -52,6 +52,21 @@ final class MPVTests: XCTestCase {
         XCTAssertTrue(audioCodecs.contains(AudioCodec.truehd.rawValue))
     }
 
+    func testMPVMusicProfileDirectPlaysBroadAudioFormatsWithoutContainerRestriction() {
+        let profile = DeviceProfile.audioPlayer(for: .mpv, maxBitrate: 12_345_678)
+        let directPlayProfiles = profile.directPlayProfiles ?? []
+
+        XCTAssertEqual(directPlayProfiles.count, 1)
+        XCTAssertNil(directPlayProfiles.first?.container)
+
+        let audioCodecs = directPlayProfiles.compactMap(\.audioCodec).joined(separator: ",")
+        XCTAssertTrue(audioCodecs.contains(AudioCodec.opus.rawValue))
+        XCTAssertTrue(audioCodecs.contains(AudioCodec.dts.rawValue))
+        XCTAssertTrue(audioCodecs.contains(AudioCodec.wmalossless.rawValue))
+        XCTAssertEqual(profile.maxStreamingBitrate, 12_345_678)
+        XCTAssertEqual(profile.musicStreamingTranscodingBitrate, 12_345_678)
+    }
+
     // MARK: - Stored value migration
 
     func testVideoPlayerTypeDecodesLegacyEnhancedValueAsMPV() throws {
@@ -123,6 +138,17 @@ final class MPVTests: XCTestCase {
         XCTAssertEqual(required.first { $0.name == "gpu-api" }?.value, "vulkan")
         XCTAssertEqual(required.first { $0.name == "gpu-context" }?.value, "moltenvk")
         XCTAssertEqual(required.first { $0.name == "config-dir" }?.value, "/config")
+    }
+
+    func testAudioOnlyOptionsDisableVideoWithoutRequiringMetal() {
+        let required = MPVInitialOptions.requiredForAudio(configurationDirectory: "/music-config")
+
+        XCTAssertEqual(required.first { $0.name == "vid" }?.value, "no")
+        XCTAssertEqual(required.first { $0.name == "audio-display" }?.value, "no")
+        XCTAssertEqual(required.first { $0.name == "config-dir" }?.value, "/music-config")
+        XCTAssertFalse(required.contains { $0.name == "vo" })
+        XCTAssertFalse(required.contains { $0.name == "gpu-api" })
+        XCTAssertFalse(required.contains { $0.name == "gpu-context" })
     }
 
     // MARK: - Upscaler
