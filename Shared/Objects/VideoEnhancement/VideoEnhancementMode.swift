@@ -188,6 +188,10 @@ enum VideoEnhancementStrings {
     )
     static let compare = String(enhancedLocalized: "enhancement.compare", defaultValue: "Compare")
     static let stopComparing = String(enhancedLocalized: "enhancement.stop-comparing", defaultValue: "Stop comparing")
+    static let compareIneffective = String(
+        enhancedLocalized: "enhancement.compare-ineffective",
+        defaultValue: "Both sides are the same: the current selection is not upscaling anything."
+    )
     static let compareFooter = String(
         enhancedLocalized: "enhancement.compare-footer",
         defaultValue: "Closes this and leaves a control over the video for switching the upscaler on and off. The selection above is not changed."

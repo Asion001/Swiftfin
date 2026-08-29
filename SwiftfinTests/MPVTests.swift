@@ -427,6 +427,26 @@ final class MPVTests: XCTestCase {
     }
 
     @MainActor
+    func testASelectionThatResolvesToNothingIsReportedAsIneffective() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+        controller.attach(to: spy)
+
+        /// The spy answers the probe with `false`, so this stands in for a build
+        /// without the MetalFX patch: the selection resolves to no upscaling,
+        /// and comparing it against no upscaling shows two identical pictures.
+        controller.requestedProvider = .metalFX
+        controller.requestedMode = .quality
+        XCTAssertFalse(controller.isSelectionEffective)
+
+        controller.requestedProvider = .shader
+        XCTAssertTrue(controller.isSelectionEffective)
+
+        controller.requestedMode = .off
+        XCTAssertFalse(controller.isSelectionEffective)
+    }
+
+    @MainActor
     func testTurningTheUpscalerOffRestoresDefaultScalers() {
         let spy = ClientSpy()
         let controller = MPVUpscalerController()
