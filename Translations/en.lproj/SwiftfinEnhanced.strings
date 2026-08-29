@@ -11,9 +11,8 @@
 "enhancement.bypass.pip" = "Unavailable during Picture in Picture";
 "enhancement.bypass.target" = "The source already matches the display size";
 "enhancement.bypass.thermal" = "Paused while the device cools down";
-"enhancement.compare" = "Hold to compare";
-"enhancement.compare-footer" = "Hold to see the picture with no upscaling at all, and release to put it back. The selection above is not changed.";
-"enhancement.comparing" = "Comparing";
+"enhancement.compare" = "Compare";
+"enhancement.compare-footer" = "Closes this and leaves a control over the video for switching the upscaler on and off. The selection above is not changed.";
 "enhancement.energy-warning" = "Real-time upscaling uses the GPU and may increase battery use and device temperature.";
 "enhancement.metalfx-unavailable" = "MetalFX needs Swiftfin's enhanced MPV build. This build will use the original picture instead.";
 "enhancement.missing-shaders" = "These shader files are missing from this build: %@";
@@ -26,6 +25,7 @@
 "enhancement.player-description" = "Plays nearly any container and codec with MPV, using VideoToolbox hardware decoding and libplacebo rendering. Upscaling, tone mapping, and subtitle rendering all happen on device.";
 "enhancement.provider.shader" = "GPU shader";
 "enhancement.shader-warning" = "Shader upscaling runs a neural network on every frame and can run hotter or drop frames on higher tiers.";
+"enhancement.stop-comparing" = "Stop comparing";
 "enhancement.title" = "Upscaling";
 "enhancement.upscaler" = "Upscaler";
 "mpv.config.advanced" = "Advanced";
