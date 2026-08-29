@@ -105,10 +105,13 @@ struct MainTabView: View {
                     await tabCoordinator.route(to: route)
                 }
             }
+        #if os(iOS)
+            .musicPlayerPopup()
+        #endif
         #if os(tvOS)
             .background(alignment: .top) {
                 FocusedPosterCinematicBackgroundView()
-            }
+        }
         #endif
     }
 }

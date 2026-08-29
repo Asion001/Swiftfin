@@ -109,6 +109,15 @@ extension Defaults.Keys {
         UserKey("userAppearance", default: .system)
     }
 
+    #if os(iOS)
+    enum MusicPlayer {
+
+        static var playerType: Key<MusicPlayerType> {
+            UserKey("musicPlayerType", default: .native)
+        }
+    }
+    #endif
+
     enum Customization {
 
         static var itemViewType: Key<ItemViewType> {

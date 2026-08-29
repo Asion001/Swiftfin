@@ -144,6 +144,13 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         }
     }
 
+    /// Initializes MPV without a drawable surface for music playback.
+    func prepareForAudioPlayback() {
+        queue.async { [weak self] in
+            self?.initializeIfNeeded(layer: nil)
+        }
+    }
+
     /// Opens a file, optionally beginning at `startSeconds`.
     ///
     /// The position is handed to MPV as the `start` option rather than seeked to
@@ -328,19 +335,21 @@ private extension MPVClientCore {
         ("track-list/count", MPV_FORMAT_INT64),
     ]
 
-    func initializeIfNeeded(layer: CAMetalLayer) {
+    func initializeIfNeeded(layer: CAMetalLayer?) {
         /// MPV is handed the layer once, as `wid`, and renders into that one for
         /// the life of the context. A context that outlives the view it was
         /// built for therefore keeps drawing into a layer nobody is showing —
         /// the picture is black while the audio plays on. Rebuild against the
         /// layer that is actually on screen instead of quietly keeping the old
         /// one.
-        if isInitialized, self.layer !== layer {
-            emit(.log("MPV was given a new layer; restarting the context"))
-            destroyHandle()
-        }
+        if let layer {
+            if isInitialized, self.layer !== layer {
+                emit(.log("MPV was given a new layer; restarting the context"))
+                destroyHandle()
+            }
 
-        self.layer = layer
+            self.layer = layer
+        }
         guard !isInitialized else { return }
 
         do {
@@ -388,7 +397,7 @@ private extension MPVClientCore {
 
     func setPreInitializationOptions(
         handle: OpaquePointer,
-        layer: CAMetalLayer
+        layer: CAMetalLayer?
     ) throws {
         /// Requested first so that everything below reports through MPV's own
         /// log, including whatever it says while refusing to start.
@@ -398,15 +407,24 @@ private extension MPVClientCore {
         try check(mpv_request_log_messages(handle, "warn"), operation: "enable logging")
         #endif
 
-        var windowID = Int64(bitPattern: UInt64(UInt(bitPattern: Unmanaged.passUnretained(layer).toOpaque())))
-        try check(
-            mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &windowID),
-            operation: "attach Metal layer"
-        )
+        let requiredOptions: [(name: String, value: String)]
 
-        for (name, value) in MPVInitialOptions.required(
-            configurationDirectory: configurationStore.directoryURL.path
-        ) {
+        if let layer {
+            var windowID = Int64(bitPattern: UInt64(UInt(bitPattern: Unmanaged.passUnretained(layer).toOpaque())))
+            try check(
+                mpv_set_option(handle, "wid", MPV_FORMAT_INT64, &windowID),
+                operation: "attach Metal layer"
+            )
+            requiredOptions = MPVInitialOptions.required(
+                configurationDirectory: configurationStore.directoryURL.path
+            )
+        } else {
+            requiredOptions = MPVInitialOptions.requiredForAudio(
+                configurationDirectory: configurationStore.directoryURL.path
+            )
+        }
+
+        for (name, value) in requiredOptions {
             try setOption(handle: handle, name: name, value: value)
         }
 

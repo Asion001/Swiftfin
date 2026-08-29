@@ -129,6 +129,7 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     ]
 
     init(
+        audioOnly: Bool = false,
         configurationStore: MPVConfigurationStore = .shared,
         client: MPVClientCore? = nil
     ) {
@@ -139,6 +140,10 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
             DispatchQueue.main.async { [weak self] in
                 self?.handle(event: event)
             }
+        }
+
+        if audioOnly {
+            self.client.prepareForAudioPlayback()
         }
     }
 

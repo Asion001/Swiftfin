@@ -32,6 +32,18 @@ enum MPVInitialOptions {
         ]
     }
 
+    /// Options for an audio-only context that does not own a Metal layer.
+    /// Disabling both video tracks and embedded cover-art display prevents MPV
+    /// from creating a video output while retaining its full FFmpeg audio path.
+    static func requiredForAudio(configurationDirectory: String) -> [(name: String, value: String)] {
+        [
+            (name: "vid", value: "no"),
+            (name: "audio-display", value: "no"),
+            (name: "config", value: "yes"),
+            (name: "config-dir", value: configurationDirectory),
+        ]
+    }
+
     /// Options Swiftfin prefers but can run without.
     ///
     /// `osc` and `ytdl` are why this split exists: mpv defines both only when

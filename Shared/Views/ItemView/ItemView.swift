@@ -44,6 +44,10 @@ struct ItemView: View {
     private var isEnhanced: Bool {
         switch itemViewType {
         case .enhanced:
+            if [.audio, .musicAlbum, .musicArtist].contains(provider.item.type) {
+                return false
+            }
+
             guard provider.item.backdropImageTags?.isNotEmpty == true else {
                 return false
             }

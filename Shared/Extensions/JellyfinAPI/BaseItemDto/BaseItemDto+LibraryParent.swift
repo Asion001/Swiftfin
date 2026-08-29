@@ -15,9 +15,12 @@ extension BaseItemDto: LibraryParent {
         let displayTitle: String
         let id: String
 
+        static let albums = Grouping(displayTitle: L10n.albums, id: "albums")
+        static let artists = Grouping(displayTitle: L10n.artists, id: "artists")
         static let episodes = Grouping(displayTitle: L10n.episodes, id: "episodes")
         static let seasons = Grouping(displayTitle: L10n.seasons, id: "seasons")
         static let series = Grouping(displayTitle: L10n.series, id: "series")
+        static let songs = Grouping(displayTitle: L10n.songs, id: "songs")
     }
 
     var libraryType: BaseItemKind? {
@@ -26,6 +29,8 @@ extension BaseItemDto: LibraryParent {
 
     var groupings: (defaultSelection: Grouping, elements: [Grouping])? {
         switch collectionType {
+        case .music:
+            (.albums, [.albums, .artists, .songs])
         case .tvshows:
             (.series, [.episodes, .seasons, .series])
         default:
@@ -56,7 +61,14 @@ extension BaseItemDto: LibraryParent {
                 [.series]
             }
         case (.music, _):
-            [.audio, .musicAlbum, .musicArtist]
+            switch grouping {
+            case .artists:
+                [.musicArtist]
+            case .songs:
+                [.audio]
+            default:
+                [.musicAlbum]
+            }
         case (.boxsets, _):
             BaseItemKind.supportedCases
         default:

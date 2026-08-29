@@ -86,6 +86,10 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         }
 
         switch item.type {
+        #if os(iOS)
+        case .musicAlbum:
+            MusicTrackContentGroup(parent: item)
+        #endif
         case .season, .series:
             SeriesEpisodeContentGroup(
                 parent: item,
@@ -104,17 +108,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                 router.route(
                     to: .contentGroup(
                         provider: ItemTypeContentGroupProvider(
-                            itemTypes: [
-                                BaseItemKind.movie,
-                                .series,
-                                .boxSet,
-                                .episode,
-                                .musicVideo,
-                                .video,
-                                .liveTvProgram,
-                                .tvChannel,
-                                .person,
-                            ],
+                            itemTypes: Self.browsableItemTypes,
                             parent: BaseItemDto(name: element.displayTitle),
                             environment: .init(filters: .init(genres: [element]))
                         )
@@ -132,17 +126,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                 router.route(
                     to: .contentGroup(
                         provider: ItemTypeContentGroupProvider(
-                            itemTypes: [
-                                BaseItemKind.movie,
-                                .series,
-                                .boxSet,
-                                .episode,
-                                .musicVideo,
-                                .video,
-                                .liveTvProgram,
-                                .tvChannel,
-                                .person,
-                            ],
+                            itemTypes: Self.browsableItemTypes,
                             parent: BaseItemDto(id: element.id, name: element.displayTitle, type: .studio)
                         )
                     )
@@ -151,6 +135,41 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         }
 
         switch item.type {
+        case .audio:
+            if let albumID = item.albumID, let album = item.album {
+                PosterGroup(
+                    id: "album",
+                    library: StaticLibrary(
+                        title: L10n.album,
+                        id: albumID,
+                        elements: [BaseItemDto(
+                            albumArtist: item.albumArtist,
+                            id: albumID,
+                            name: album,
+                            type: .musicAlbum
+                        )]
+                    ),
+                    posterDisplayType: .square,
+                    posterSize: .small
+                )
+            }
+
+            let artists = (item.artistItems ?? item.albumArtists ?? []).map {
+                BaseItemDto(id: $0.id, name: $0.name, type: .musicArtist)
+            }
+
+            if artists.isNotEmpty {
+                PosterGroup(
+                    id: "artists",
+                    library: StaticLibrary(
+                        title: L10n.artists,
+                        id: "artists",
+                        elements: artists
+                    ),
+                    posterDisplayType: .square,
+                    posterSize: .small
+                )
+            }
         case .movie:
             if item.partCount ?? 0 > 1 {
                 PosterGroup(
@@ -160,11 +179,17 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                     posterSize: .small
                 )
             }
-        case .boxSet, .person, .musicArtist:
+        case .boxSet, .person:
             try await ItemTypeContentGroupProvider(
                 itemTypes: BaseItemKind.supportedCases
                     .appending(.episode)
                     .appending(.person),
+                parent: item
+            )
+            .makeGroups(environment: .default)
+        case .musicArtist:
+            try await ItemTypeContentGroupProvider(
+                itemTypes: [.musicAlbum],
                 parent: item
             )
             .makeGroups(environment: .default)
@@ -226,7 +251,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
             PosterGroup(
                 id: "similar-items",
                 library: SimilarItemsLibrary(itemID: itemID, itemType: item.type),
-                posterDisplayType: .landscape,
+                posterDisplayType: relatedPosterDisplayType(for: item),
                 posterSize: .small
             )
         }
@@ -274,6 +299,10 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         userSession: UserSession
     ) async throws -> MediaPlayerItemProvider? {
         let playbackItem: BaseItemDto? = switch item.type {
+        #if os(iOS)
+        case .musicAlbum, .musicArtist:
+            try await firstAudioItem(for: item)
+        #endif
         case .series:
             if let nextUp = try await nextUpItem(for: item) {
                 nextUp
@@ -333,6 +362,49 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         let response = try await send(request)
 
         return response.value.items?.first
+    }
+
+    /// Music is only browsable where it is playable.
+    private static var browsableItemTypes: [BaseItemKind] {
+        let itemTypes: [BaseItemKind] = [
+            .movie,
+            .series,
+            .boxSet,
+            .episode,
+            .musicVideo,
+            .video,
+            .liveTvProgram,
+            .tvChannel,
+            .person,
+        ]
+
+        #if os(iOS)
+        return itemTypes.appending([.audio, .musicAlbum, .musicArtist])
+        #else
+        return itemTypes
+        #endif
+    }
+
+    private func firstAudioItem(for item: BaseItemDto) async throws -> BaseItemDto? {
+        let library = MusicTrackLibrary(parent: item, limit: 1)
+        let pageState = try LibraryPageState(
+            pageOffset: 0,
+            pageSize: 1,
+            userSession: requireUserSession()
+        )
+
+        return try await library.retrievePage(
+            environment: .default,
+            pageState: pageState
+        ).first
+    }
+
+    private func relatedPosterDisplayType(for item: BaseItemDto) -> PosterDisplayType {
+        if item.type == .audio || item.type == .musicAlbum {
+            return .square
+        }
+
+        return .landscape
     }
 
     private func localTrailers(for item: BaseItemDto) async throws -> [BaseItemDto] {

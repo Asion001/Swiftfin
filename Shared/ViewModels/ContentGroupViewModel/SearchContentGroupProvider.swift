@@ -32,20 +32,31 @@ struct SearchContentGroupProvider: ContentGroupProvider {
         self.environment = .init(filters: filterViewModel.currentFilters)
     }
 
+    /// Music is only searchable where it is playable.
+    private var searchItemTypes: [BaseItemKind] {
+        let itemTypes: [BaseItemKind] = [
+            .movie,
+            .series,
+            .boxSet,
+            .episode,
+            .musicVideo,
+            .video,
+            .liveTvProgram,
+            .tvChannel,
+            .musicArtist,
+        ]
+
+        #if os(iOS)
+        return itemTypes.appending([.audio, .musicAlbum])
+        #else
+        return itemTypes
+        #endif
+    }
+
     @ContentGroupBuilder
     func makeGroups(environment: Environment) async throws -> [any ContentGroup] {
         try await ItemTypeContentGroupProvider(
-            itemTypes: [
-                BaseItemKind.movie,
-                .series,
-                .boxSet,
-                .episode,
-                .musicVideo,
-                .video,
-                .liveTvProgram,
-                .tvChannel,
-                .musicArtist,
-            ]
+            itemTypes: searchItemTypes
         )
         .makeGroups(environment: .init(filters: environment.filters))
 

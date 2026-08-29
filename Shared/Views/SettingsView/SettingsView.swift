@@ -16,6 +16,8 @@ struct SettingsView: View {
     #if os(iOS)
     @Default(.userAppearance)
     private var appearance
+    @Default(.MusicPlayer.playerType)
+    private var musicPlayerType
     #endif
 
     @Default(.userAccentColor)
@@ -39,6 +41,9 @@ struct SettingsView: View {
         Form(image: .jellyfinBlobBlue) {
             serverSection
             videoPlayerSection
+            #if os(iOS)
+            musicPlayerSection
+            #endif
             customizeSection
             diagnosticsSection
         }
@@ -154,6 +159,15 @@ struct SettingsView: View {
             #endif
         }
     }
+
+    #if os(iOS)
+    @ViewBuilder
+    private var musicPlayerSection: some View {
+        Section(L10n.music) {
+            Picker(L10n.music, selection: $musicPlayerType, onlySupported: true)
+        }
+    }
+    #endif
 
     // MARK: - Customization Section
 
