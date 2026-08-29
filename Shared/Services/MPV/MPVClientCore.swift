@@ -94,6 +94,7 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     private var eventHandler: EventHandler?
     private var isLayerSizeCheckScheduled = false
     private var lastLayerSizeCheck: UInt64 = 0
+    private var lastReportedLayerSizeDrift: String?
     private var handle: OpaquePointer?
     private var isInitialized = false
     private var layer: CAMetalLayer?
@@ -445,14 +446,24 @@ private extension MPVClientCore {
 
         /// Zero until the first file is configured, which is not drift.
         guard let outputWidth, let outputHeight, outputWidth > 0, outputHeight > 0 else { return }
-        guard outputWidth != width || outputHeight != height else { return }
+        guard outputWidth != width || outputHeight != height else {
+            lastReportedLayerSizeDrift = nil
+            return
+        }
 
-        emit(
-            .log(
-                "MPV is drawing for a \(outputWidth)x\(outputHeight) surface but its layer "
-                    + "is \(width)x\(height); resynchronizing"
+        /// Reported once per distinct mismatch. A repair that does not take would
+        /// otherwise restate the same line ten times a second for the rest of
+        /// playback and bury everything else in the log.
+        let drift = "\(outputWidth)x\(outputHeight) for \(width)x\(height)"
+        if drift != lastReportedLayerSizeDrift {
+            lastReportedLayerSizeDrift = drift
+            emit(
+                .log(
+                    "MPV is drawing for a \(outputWidth)x\(outputHeight) surface but its layer "
+                        + "is \(width)x\(height); resynchronizing"
+                )
             )
-        )
+        }
 
         /// Changing an option in MPV's video-position group runs the VO's
         /// `resize`, and `resize` asks libplacebo for the swapchain's real
