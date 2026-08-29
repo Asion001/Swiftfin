@@ -86,61 +86,14 @@ extension VideoPlayer {
         // TODO: preview image while scrubbing option
         private struct PlayerContainerView: View {
 
-            @EnvironmentObject
-            private var containerState: VideoPlayerContainerState
-
             let player: AnyView
 
-            private var shouldPresentDimOverlay: Bool {
-                if containerState.isScrubbing {
-                    return false
-                }
-
-                if containerState.isCompact {
-                    return containerState.isPresentingPlaybackControls
-                } else {
-                    return containerState.isPresentingOverlay
-                }
-            }
-
-            private var presentedSupplementStyle: MediaPlayerSupplementPresentationStyle? {
-                #if os(tvOS)
-                containerState.presentedSupplementStyle
-                #else
-                containerState.selectedSupplement?.presentationStyle
-                #endif
-            }
-
             var body: some View {
-                // Keep the decoded image at a stable luminance when controls
-                // appear. The lower gradient still provides control contrast
-                // without making playback look like its brightness changed.
+                // No scrim over the picture. The bottom of the frame is where the
+                // player draws its subtitles, so anything laid over it to give the
+                // controls contrast darkens the subtitles too; the controls carry
+                // their own backgrounds instead.
                 player
-                    .overlay {
-                        Group {
-                            if presentedSupplementStyle == .expanded {
-                                Color.black.opacity(0.8)
-                            } else {
-                                GeometryReader { proxy in
-                                    LinearGradient(
-                                        stops: [
-                                            .init(color: .clear, location: 0),
-                                            .init(color: .black.opacity(0.04), location: 0.25),
-                                            .init(color: .black.opacity(0.18), location: 0.45),
-                                            .init(color: .black.opacity(0.42), location: 0.68),
-                                            .init(color: .black.opacity(0.68), location: 0.86),
-                                            .init(color: .black.opacity(0.82), location: 1),
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                    .frame(height: proxy.size.height * 0.55)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                                }
-                            }
-                        }
-                        .isVisible(shouldPresentDimOverlay)
-                    }
                     .allowsHitTesting(false)
             }
         }

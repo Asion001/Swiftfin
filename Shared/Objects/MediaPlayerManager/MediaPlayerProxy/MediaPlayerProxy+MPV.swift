@@ -66,6 +66,27 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     let diagnostics = MPVPlaybackDiagnostics()
     let upscaler: MPVUpscalerController
 
+    /// The layer MPV renders into, owned here rather than by the view.
+    ///
+    /// MPV is handed this layer once, as `wid`, and draws into that one for the
+    /// life of the context, so the layer has to outlive any particular view.
+    /// SwiftUI rebuilds the surface — opening a supplement is enough — and a
+    /// layer created per view meant every rebuild either stranded MPV on a layer
+    /// nothing was showing or forced the context to restart, which drops the
+    /// picture and tears the audio output down with it. Re-parenting one layer
+    /// costs nothing and MPV never notices.
+    let renderLayer: MPVMetalLayer = {
+        let layer = MPVMetalLayer()
+        layer.device = MTLCreateSystemDefaultDevice()
+        layer.isOpaque = true
+        layer.backgroundColor = UIColor.black.cgColor
+        layer.contentsScale = UIScreen.main.nativeScale
+        layer.pixelFormat = .bgra8Unorm
+        /// Raised once MPV reports an HDR transfer function.
+        layer.wantsExtendedDynamicRangeContent = false
+        return layer
+    }()
+
     private let client: MPVClientCore
     private let configurationStore: MPVConfigurationStore
     private var decoderDroppedFrames = 0
@@ -76,7 +97,6 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     private var rateObserver: AnyCancellable?
     private var sourceHeight = 0
     private var sourceWidth = 0
-    private weak var metalLayer: CAMetalLayer?
     private var transferFunction: String?
     private var signalPeak: Double = 1
 
@@ -189,9 +209,35 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
             name: "sub-font-size",
             value: String(Int(EnhancedSubtitleGeometry.fontPointSize(for: configuration.size)))
         )
-        client.setOption(name: "sub-color", value: configuration.color.hexString)
+        client.setOption(name: "sub-color", value: Self.mpvColor(for: configuration.color))
         client.setOption(name: "sub-pos", value: String(position))
-        client.setOption(name: "sub-ass-override", value: "force")
+
+        /// MPV always applies the `sub-*` options to the formats it converts to
+        /// ASS itself — SubRip, WebVTT and the rest — so the font, size and
+        /// colour chosen here still reach them. `force` additionally replaces the
+        /// fonts, colours, borders and positioning that an ASS or SSA script
+        /// authored for itself, which is exactly what those subtitles carry
+        /// signs, karaoke and typesetting in. `scale`, MPV's own default, keeps
+        /// that intact while still honouring the position set above.
+        client.setOption(name: "sub-ass-override", value: "scale")
+    }
+
+    /// A colour in the form MPV parses.
+    ///
+    /// `Color.hexString` returns bare `RRGGBB`, which MPV rejects outright —
+    /// `Option sub-color: invalid color: 'FFFFFF'` — so the subtitle colour never
+    /// reached the player. MPV wants a leading `#`, and puts alpha first.
+    static func mpvColor(for color: Color) -> String {
+        let components = color.rgbaComponents
+        let channel: (Double) -> Int = { Int((min(1, max(0, $0)) * 255).rounded()) }
+
+        return String(
+            format: "#%02X%02X%02X%02X",
+            channel(components.alpha),
+            channel(components.red),
+            channel(components.green),
+            channel(components.blue)
+        )
     }
 
     func takeScreenshot(includeSubtitles: Bool = true) async throws -> URL {
@@ -215,11 +261,32 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         return signalPeak > 1
     }
 
-    func attach(to layer: CAMetalLayer) {
-        metalLayer = layer
-        client.attach(to: layer)
+    func attach() {
+        client.attach(to: renderLayer)
         upscaler.attach(to: client)
         updateDynamicRange()
+    }
+
+    /// Ends the MPV context once the surface is gone for good.
+    ///
+    /// Deferred, because a rebuild releases the old view after the replacement
+    /// has already adopted the layer: if something has taken it by the time this
+    /// runs, the player is still on screen and the context is still wanted.
+    /// Playback used to be stopped only by the manager reaching `.stopped`, and
+    /// when that did not reach the client the context stayed alive behind a
+    /// dismissed player — audible, invisible, and still holding a GPU context
+    /// that the next one had to start alongside.
+    nonisolated func playerSurfaceDidDeinit() {
+        Task { @MainActor [weak self] in
+            guard let self, renderLayer.superlayer == nil else { return }
+            client.shutdown()
+        }
+    }
+
+    /// See `MPVClientCore.synchronizeWithLayerSize()`: MPV cannot notice that the
+    /// layer it draws into was resized, so the view hosting it has to say so.
+    func layerDidLayOut() {
+        client.synchronizeWithLayerSize()
     }
 
     @ViewBuilder
@@ -230,7 +297,7 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
 
 private extension MPVMediaPlayerProxy {
 
-    func load(item: MediaPlayerItem) {
+    func load(item: MediaPlayerItem, from seconds: Duration? = nil) {
         playbackItem = item
         isBuffering.value = true
         diagnostics.record(log: "Loading \(item.url.lastPathComponent)")
@@ -238,17 +305,30 @@ private extension MPVMediaPlayerProxy {
         // A stopped MPV context is intentionally destroyed. Re-attaching here
         // makes a proxy that receives another item usable instead of leaving a
         // queued URL with no context and presenting a black surface. This goes
-        // through `attach(to:)` so the new context is configured exactly like a
+        // through `attach()` so the new context is configured exactly like a
         // first attach, upscaler options included.
-        if let metalLayer {
-            attach(to: metalLayer)
-        }
+        attach()
 
         let audioIndex = item.indexMap.playerIndex(for: item.selectedAudioStreamIndex)
         let subtitleIndex = item.indexMap.playerIndex(for: item.selectedSubtitleStreamIndex)
         client.selectTrack(kind: .audio, ffIndex: audioIndex)
         client.selectTrack(kind: .subtitle, ffIndex: subtitleIndex)
-        client.load(url: item.url)
+        client.load(
+            url: item.url,
+            startSeconds: (seconds ?? startSeconds(for: item)).seconds
+        )
+    }
+
+    /// A live stream has no meaningful resume position, and asking for one only
+    /// delays the first frame.
+    func startSeconds(for item: MediaPlayerItem) -> Duration {
+        guard !item.baseItem.isLiveStream else { return .zero }
+
+        return max(
+            .zero,
+            (item.baseItem.startSeconds ?? .zero)
+                - Duration.seconds(Defaults[.VideoPlayer.resumeOffset])
+        )
     }
 
     func handle(event: MPVClientCore.Event) {
@@ -288,14 +368,6 @@ private extension MPVMediaPlayerProxy {
             client.addSubtitle(url: url, title: subtitle.displayTitle)
         }
 
-        let startSeconds = max(
-            .zero,
-            (playbackItem.baseItem.startSeconds ?? .zero)
-                - Duration.seconds(Defaults[.VideoPlayer.resumeOffset])
-        )
-        if startSeconds > .zero {
-            client.seek(to: startSeconds.seconds)
-        }
         client.setRate(Double(manager?.rate ?? 1))
         setSubtitleConfiguration(Defaults[.VideoPlayer.Subtitle.configuration])
         client.play()
@@ -342,7 +414,7 @@ private extension MPVMediaPlayerProxy {
     /// Requesting EDR headroom unconditionally makes SDR content wash out on
     /// some displays, so it follows the actual video parameters.
     func updateDynamicRange() {
-        metalLayer?.wantsExtendedDynamicRangeContent = isHighDynamicRange
+        renderLayer.wantsExtendedDynamicRangeContent = isHighDynamicRange
     }
 
     func updateDroppedFrames() {
@@ -390,9 +462,6 @@ private struct MPVPlayerSurface: UIViewRepresentable {
 }
 
 private final class MPVPlayerUIView: UIView {
-    override class var layerClass: AnyClass {
-        MPVMetalLayer.self
-    }
 
     private let proxy: MPVMediaPlayerProxy
 
@@ -403,21 +472,19 @@ private final class MPVPlayerUIView: UIView {
         backgroundColor = .black
         isOpaque = true
 
-        guard let metalLayer = layer as? CAMetalLayer else { return }
-        metalLayer.device = MTLCreateSystemDefaultDevice()
-        metalLayer.framebufferOnly = true
-        metalLayer.isOpaque = true
-        metalLayer.backgroundColor = UIColor.black.cgColor
-        metalLayer.contentsScale = UIScreen.main.nativeScale
-        metalLayer.pixelFormat = .bgra8Unorm
-        /// Raised by the proxy once MPV reports an HDR transfer function.
-        metalLayer.wantsExtendedDynamicRangeContent = false
-        proxy.attach(to: metalLayer)
+        /// Adding it to this layer removes it from whichever view held it
+        /// before, so a rebuilt surface adopts the running one.
+        layer.addSublayer(proxy.renderLayer)
+        proxy.attach()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        proxy.playerSurfaceDidDeinit()
     }
 
     override func layoutSubviews() {
@@ -426,16 +493,41 @@ private final class MPVPlayerUIView: UIView {
     }
 
     func updateDrawableSize() {
-        guard let metalLayer = layer as? CAMetalLayer else { return }
+        let metalLayer = proxy.renderLayer
+        guard metalLayer.superlayer === layer else { return }
+
+        /// Laying the layer out is not something to animate: an implicit
+        /// animation on its frame stretches the picture for the length of
+        /// whatever animation happens to be running.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+
+        metalLayer.frame = bounds
         metalLayer.contentsScale = window?.screen.nativeScale ?? UIScreen.main.nativeScale
-        metalLayer.drawableSize = CGSize(
+
+        let drawableSize = CGSize(
             width: bounds.width * metalLayer.contentsScale,
             height: bounds.height * metalLayer.contentsScale
         )
+
+        /// `layoutSubviews` runs on every frame of the animation that opens a
+        /// supplement, and each accepted size costs MPV a swapchain.
+        if drawableSize.width > 1,
+           drawableSize.height > 1,
+           drawableSize != metalLayer.drawableSize
+        {
+            metalLayer.drawableSize = drawableSize
+        }
+
+        /// Told on every pass rather than only when the size changed here: MPV
+        /// can fall out of step with a layer this view never resized, and the
+        /// check on the other side is two property reads.
+        proxy.layerDidLayOut()
     }
 }
 
-private final class MPVMetalLayer: CAMetalLayer {
+final class MPVMetalLayer: CAMetalLayer {
     override var drawableSize: CGSize {
         get { super.drawableSize }
         set {

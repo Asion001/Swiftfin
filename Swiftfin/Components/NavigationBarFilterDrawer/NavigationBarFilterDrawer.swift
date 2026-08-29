@@ -9,6 +9,7 @@
 import Defaults
 import JellyfinAPI
 import SwiftUI
+@_spi(Advanced) import SwiftUIIntrospect
 
 struct NavigationBarFilterDrawer: View {
 
@@ -52,5 +53,14 @@ struct NavigationBarFilterDrawer: View {
         }
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
+        /// The drawer is the content of a `safeAreaBar`, which hands its bar the
+        /// container's rect *and* the container's safe area, expecting the bar to
+        /// lay itself out within the inset. SwiftUI does place this scroll view
+        /// correctly — but UIKit then adjusts the scroll content by that same
+        /// inset again, pushing the filters a navigation bar's height below the
+        /// bar they belong to.
+        .introspect(.scrollView, on: .iOS(.v18...)) { scrollView in
+            scrollView.contentInsetAdjustmentBehavior = .never
+        }
     }
 }

@@ -95,10 +95,15 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
 
     private var desiredTracks: [MPVTrack.Kind: DesiredTrack] = [:]
     private var eventHandler: EventHandler?
+    private var isLayerSizeCheckScheduled = false
+    private var lastLayerSizeCheck: UInt64 = 0
+    private var lastReportedLayerSizeDrift: String?
+    private var hasReportedLayerSizeCheck = false
     private var handle: OpaquePointer?
     private var isInitialized = false
     private var layer: CAMetalLayer?
     private var nextCommandID: UInt64 = 1
+    private var pendingStartSeconds: Double = 0
     private var pendingURL: URL?
     private var pendingCommands: [UInt64: CheckedContinuation<Void, any Error>] = [:]
     private var tracks: [MPVTrack] = []
@@ -139,10 +144,17 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         }
     }
 
-    func load(url: URL) {
+    /// Opens a file, optionally beginning at `startSeconds`.
+    ///
+    /// The position is handed to MPV as the `start` option rather than seeked to
+    /// once the file is loaded: `loadfile` begins playing immediately, so a seek
+    /// issued from the `fileLoaded` event always shows a second or so of the
+    /// opening frames before the picture jumps to where the user left off.
+    func load(url: URL, startSeconds: Double = 0) {
         queue.async { [weak self] in
             guard let self else { return }
             pendingURL = url
+            pendingStartSeconds = startSeconds
             loadPendingURLIfPossible()
         }
     }
@@ -259,6 +271,28 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         }
     }
 
+    /// Repairs MPV's idea of the surface it draws into when it has drifted from
+    /// the layer's actual size.
+    ///
+    /// The `moltenvk` GPU context reads `CAMetalLayer.drawableSize` only from its
+    /// `reconfig`, and its `control` answers `VO_NOTIMPL` to everything, so in
+    /// this build nothing turns a layer resize into a `VO_EVENT_RESIZE` — the
+    /// `android-surface-size` property that drives `VOCTRL_EXTERNAL_RESIZE`
+    /// elsewhere is compiled out on Apple platforms. Left alone, `vo->dwidth` and
+    /// `vo->dheight` keep the size the file was opened at while libplacebo
+    /// rebuilds the swapchain at the new one, and MPV goes on drawing the picture
+    /// into a rectangle that no longer lands on the layer — mostly, or entirely,
+    /// off it.
+    ///
+    /// Safe to call on every layout pass. The size is compared first and nothing
+    /// happens while the two agree, and comparing is rate limited because reading
+    /// a property blocks on MPV's core thread.
+    func synchronizeWithLayerSize() {
+        queue.async { [weak self] in
+            self?.scheduleLayerSizeCheck()
+        }
+    }
+
     func shutdown() {
         // Retain the client until queued teardown completes. This makes the
         // non-blocking deinit path a fallback rather than the normal path.
@@ -295,6 +329,17 @@ private extension MPVClientCore {
     ]
 
     func initializeIfNeeded(layer: CAMetalLayer) {
+        /// MPV is handed the layer once, as `wid`, and renders into that one for
+        /// the life of the context. A context that outlives the view it was
+        /// built for therefore keeps drawing into a layer nobody is showing —
+        /// the picture is black while the audio plays on. Rebuild against the
+        /// layer that is actually on screen instead of quietly keeping the old
+        /// one.
+        if isInitialized, self.layer !== layer {
+            emit(.log("MPV was given a new layer; restarting the context"))
+            destroyHandle()
+        }
+
         self.layer = layer
         guard !isInitialized else { return }
 
@@ -394,9 +439,117 @@ private extension MPVClientCore {
         emit(.log("MPV does not support option \(name): \(String(cString: mpv_error_string(status)))"))
     }
 
+    /// A sub-pixel nudge: `video-align-y` is a fraction of the letterbox slack,
+    /// so a ten-thousandth of it never survives rounding to a whole pixel.
+    static let layerSizeProbeAlignment = "0.0001"
+
+    /// Reading a property blocks until MPV's core thread answers, and layout can
+    /// run once per displayed frame, so checks are spaced out. The delayed branch
+    /// means the last layout of a burst is still checked once things settle.
+    static let layerSizeCheckInterval: UInt64 = 100_000_000
+
+    func setVideoAlignY(_ value: String) {
+        guard let handle else { return }
+        reportIfFailed(
+            mpv_set_property_string(handle, "video-align-y", value),
+            operation: "resynchronize video output"
+        )
+    }
+
+    func scheduleLayerSizeCheck() {
+        guard !isLayerSizeCheckScheduled else { return }
+
+        let elapsed = DispatchTime.now().uptimeNanoseconds &- lastLayerSizeCheck
+
+        guard elapsed < Self.layerSizeCheckInterval else {
+            checkLayerSize()
+            return
+        }
+
+        isLayerSizeCheckScheduled = true
+        queue.asyncAfter(
+            deadline: .now() + .nanoseconds(Int(Self.layerSizeCheckInterval - elapsed))
+        ) { [weak self] in
+            guard let self else { return }
+            isLayerSizeCheckScheduled = false
+            checkLayerSize()
+        }
+    }
+
+    func checkLayerSize() {
+        lastLayerSizeCheck = DispatchTime.now().uptimeNanoseconds
+
+        guard let handle, let layer else { return }
+
+        let drawableSize = layer.drawableSize
+        let width = Int64(drawableSize.width.rounded())
+        let height = Int64(drawableSize.height.rounded())
+        guard width > 0, height > 0 else { return }
+
+        /// `osd-dimensions` is MPV's own view of the surface it draws into —
+        /// `vo->dwidth` and `vo->dheight` as the last `resize` left them.
+        let outputWidth = getInt64(handle: handle, name: "osd-dimensions/w")
+        let outputHeight = getInt64(handle: handle, name: "osd-dimensions/h")
+
+        /// Zero until the first file is configured, which is not drift.
+        guard let outputWidth, let outputHeight, outputWidth > 0, outputHeight > 0 else { return }
+
+        /// Said once, so that a log without any of the lines below means the
+        /// sizes agreed rather than that this check never read anything.
+        if !hasReportedLayerSizeCheck {
+            hasReportedLayerSizeCheck = true
+            emit(.log("MPV surface is \(outputWidth)x\(outputHeight) for a \(width)x\(height) layer"))
+        }
+        guard outputWidth != width || outputHeight != height else {
+            lastReportedLayerSizeDrift = nil
+            return
+        }
+
+        /// Reported once per distinct mismatch. A repair that does not take would
+        /// otherwise restate the same line ten times a second for the rest of
+        /// playback and bury everything else in the log.
+        let drift = "\(outputWidth)x\(outputHeight) for \(width)x\(height)"
+        if drift != lastReportedLayerSizeDrift {
+            lastReportedLayerSizeDrift = drift
+            emit(
+                .log(
+                    "MPV is drawing for a \(outputWidth)x\(outputHeight) surface but its layer "
+                        + "is \(width)x\(height); resynchronizing"
+                )
+            )
+        }
+
+        /// Changing an option in MPV's video-position group runs the VO's
+        /// `resize`, and `resize` asks libplacebo for the swapchain's real
+        /// extent, which is the layer's. It takes two changes: the first
+        /// corrects `dwidth`/`dheight` after that pass has already computed its
+        /// source and destination rectangles, the second recomputes them from
+        /// the corrected size. They cannot be issued back to back, because MPV
+        /// coalesces option changes that land before its VO thread next runs.
+        setVideoAlignY(Self.layerSizeProbeAlignment)
+        queue.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.setVideoAlignY("0")
+        }
+    }
+
     func loadPendingURLIfPossible() {
         guard isInitialized, let pendingURL else { return }
         self.pendingURL = nil
+
+        /// Always written, so that the position asked for by one item cannot
+        /// carry over into the next one loaded into the same context.
+        if let handle {
+            reportIfFailed(
+                mpv_set_property_string(
+                    handle,
+                    "start",
+                    pendingStartSeconds > 0 ? String(pendingStartSeconds) : "none"
+                ),
+                operation: "set start position"
+            )
+        }
+        pendingStartSeconds = 0
+
         performCommand(["loadfile", pendingURL.absoluteString, "replace"])
     }
 
@@ -669,6 +822,8 @@ private extension MPVClientCore {
         mpv_terminate_destroy(handle)
         self.handle = nil
         isInitialized = false
+        hasReportedLayerSizeCheck = false
+        lastReportedLayerSizeDrift = nil
         tracks = []
         layer = nil
     }
