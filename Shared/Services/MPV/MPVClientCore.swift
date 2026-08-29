@@ -123,20 +123,6 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         }
     }
 
-    /// Tears the context down, but only while `layer` is still the one it draws
-    /// into.
-    ///
-    /// Called when the view owning that layer goes away. The check matters
-    /// because a replacement view can be attached before the old one is
-    /// released, and shutting down then would kill the context that just took
-    /// over.
-    func shutdown(ownedBy layer: CAMetalLayer) {
-        queue.async { [weak self] in
-            guard let self, self.layer === layer else { return }
-            destroyHandle()
-        }
-    }
-
     /// Opens a file, optionally beginning at `startSeconds`.
     ///
     /// The position is handed to MPV as the `start` option rather than seeked to
