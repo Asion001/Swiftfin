@@ -44,7 +44,7 @@ Xcode build phases run `swiftformat .`, `swiftlint lint`, `swiftgen`, and `Alpha
 
 - User-facing strings live in `Translations/en.lproj/Localizable.strings`; other locales come from Weblate — do not hand-edit them.
 - `Shared/Strings/Strings.swift` is SwiftGen output. Never edit it; edit the `.strings` file and rebuild (or run `swiftgen`).
-- Reference strings as `L10n.someKey`. The SwiftLint `hard_coded_display_string` custom rule flags literal strings passed to `Text`/`Button`/`Label`/`Toggle`/`Picker`/`Section`/`LabeledContent` and in `displayTitle` — run under `--strict`, so violations fail CI. Experimental fork-only strings use `String(localized:defaultValue:)` instead (see `VideoPlayerType.displayTitle`).
+- Reference strings as `L10n.someKey`. The SwiftLint `hard_coded_display_string` custom rule flags literal strings passed to `Text`/`Button`/`Label`/`Toggle`/`Picker`/`Section`/`LabeledContent` and in `displayTitle` — run under `--strict`, so violations fail CI. Fork-only strings never go in `Localizable.strings` — they live in `Translations/en.lproj/SwiftfinEnhanced.strings` and are read with `String(enhancedLocalized:defaultValue:)` (see `VideoPlayerType.displayTitle`), which keeps them off upstream's merge surface. Both tables are checked by `FindUnusedStrings.swift`, and a used key missing from the enhanced table fails CI.
 - Unused keys fail CI; remove keys along with their last usage.
 
 ## Code conventions

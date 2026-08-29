@@ -12,30 +12,30 @@ import SwiftUI
 // swiftlint:disable hard_coded_display_string
 
 enum MPVConfigurationStrings {
-    static let title = String(localized: "mpv.config.title", defaultValue: "MPV configuration")
-    static let advanced = String(localized: "mpv.config.advanced", defaultValue: "Advanced")
-    static let editConfiguration = String(localized: "mpv.config.edit-mpv", defaultValue: "Edit mpv.conf")
-    static let editInput = String(localized: "mpv.config.edit-input", defaultValue: "Edit input.conf")
-    static let reset = String(localized: "mpv.config.reset", defaultValue: "Reset to defaults")
+    static let title = String(enhancedLocalized: "mpv.config.title", defaultValue: "MPV configuration")
+    static let advanced = String(enhancedLocalized: "mpv.config.advanced", defaultValue: "Advanced")
+    static let editConfiguration = String(enhancedLocalized: "mpv.config.edit-mpv", defaultValue: "Edit mpv.conf")
+    static let editInput = String(enhancedLocalized: "mpv.config.edit-input", defaultValue: "Edit input.conf")
+    static let reset = String(enhancedLocalized: "mpv.config.reset", defaultValue: "Reset to defaults")
     static let resetConfirmation = String(
-        localized: "mpv.config.reset-confirmation",
+        enhancedLocalized: "mpv.config.reset-confirmation",
         defaultValue: "Replace this file with Swiftfin's defaults? Your changes will be lost."
     )
-    static let save = String(localized: "mpv.config.save", defaultValue: "Save")
+    static let save = String(enhancedLocalized: "mpv.config.save", defaultValue: "Save")
     static let restartRequired = String(
-        localized: "mpv.config.restart-required",
+        enhancedLocalized: "mpv.config.restart-required",
         defaultValue: "Configuration files are read when playback starts. Changes apply to the next video."
     )
     static let precedence = String(
-        localized: "mpv.config.precedence",
+        enhancedLocalized: "mpv.config.precedence",
         defaultValue: "MPV reads this file after Swiftfin applies its own settings, so options set here override them."
     )
     static let inputPrecedence = String(
-        localized: "mpv.config.input-precedence",
+        enhancedLocalized: "mpv.config.input-precedence",
         defaultValue: "Swiftfin owns touch and remote controls. Bindings added here apply to attached keyboards."
     )
-    static let loadFailed = String(localized: "mpv.config.load-failed", defaultValue: "Could not read this file.")
-    static let saveFailed = String(localized: "mpv.config.save-failed", defaultValue: "Could not save this file.")
+    static let loadFailed = String(enhancedLocalized: "mpv.config.load-failed", defaultValue: "Could not read this file.")
+    static let saveFailed = String(enhancedLocalized: "mpv.config.save-failed", defaultValue: "Could not save this file.")
 }
 
 /// Curated MPV settings plus raw access to the files MPV actually reads.

@@ -64,8 +64,9 @@ protocol MediaPlayerSubtitleConfigurable {
     func setSubtitleConfiguration(_ configuration: SubtitleConfiguration)
 }
 
+@MainActor
 protocol MediaPlayerScreenshotCapturing {
-    func takeScreenshot(includeSubtitles: Bool) throws -> URL
+    func takeScreenshot(includeSubtitles: Bool) async throws -> URL
 }
 
 @MainActor

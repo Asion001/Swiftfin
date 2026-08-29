@@ -14,6 +14,7 @@ import QuartzCore
 enum MPVClientError: LocalizedError {
     case api(operation: String, code: Int32)
     case initialization
+    case terminated
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +23,8 @@ enum MPVClientError: LocalizedError {
             return "MPV \(operation) failed: \(message)"
         case .initialization:
             return "MPV could not create a playback context"
+        case .terminated:
+            return "MPV playback ended before the command completed"
         }
     }
 }
@@ -99,8 +102,10 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     private var handle: OpaquePointer?
     private var isInitialized = false
     private var layer: CAMetalLayer?
+    private var nextCommandID: UInt64 = 1
     private var pendingStartSeconds: Double = 0
     private var pendingURL: URL?
+    private var pendingCommands: [UInt64: CheckedContinuation<Void, any Error>] = [:]
     private var tracks: [MPVTrack] = []
 
     init(configurationStore: MPVConfigurationStore = .shared) {
@@ -108,7 +113,23 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     }
 
     deinit {
-        shutdownSynchronously()
+        // Nothing can await these once `self` is gone, so they are failed here
+        // rather than left suspended forever.
+        for continuation in pendingCommands.values {
+            continuation.resume(throwing: MPVClientError.terminated)
+        }
+        pendingCommands.removeAll()
+
+        guard let handle else { return }
+
+        // Normal playback teardown calls `shutdown()` and reaches deinit only
+        // after the handle is gone. Keep this fallback non-blocking while
+        // clearing the unretained callback before `self` can disappear.
+        mpv_set_wakeup_callback(handle, nil, nil)
+        let detachedHandle = MPVDetachedHandle(handle)
+        queue.async {
+            detachedHandle.destroy()
+        }
     }
 
     func setEventHandler(_ handler: EventHandler?) {
@@ -230,12 +251,24 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         command(arguments)
     }
 
-    func takeScreenshot(to url: URL, includeSubtitles: Bool = true) {
-        command([
-            "screenshot-to",
-            url.path,
-            includeSubtitles ? "subtitles" : "video",
-        ])
+    func takeScreenshot(to url: URL, includeSubtitles: Bool = true) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            queue.async { [weak self] in
+                guard let self else {
+                    continuation.resume(throwing: MPVClientError.terminated)
+                    return
+                }
+
+                performCommand(
+                    [
+                        "screenshot-to",
+                        url.path,
+                        includeSubtitles ? "subtitles" : "video",
+                    ],
+                    continuation: continuation
+                )
+            }
+        }
     }
 
     /// Repairs MPV's idea of the surface it draws into when it has drifted from
@@ -261,8 +294,10 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     }
 
     func shutdown() {
-        queue.async { [weak self] in
-            self?.destroyHandle()
+        // Retain the client until queued teardown completes. This makes the
+        // non-blocking deinit path a fallback rather than the normal path.
+        queue.async {
+            self.destroyHandle()
         }
     }
 }
@@ -543,6 +578,37 @@ private extension MPVClientCore {
         )
     }
 
+    func performCommand(
+        _ arguments: [String],
+        continuation: CheckedContinuation<Void, any Error>
+    ) {
+        guard let handle, arguments.isNotEmpty else {
+            continuation.resume(throwing: MPVClientError.terminated)
+            return
+        }
+
+        let commandID = nextCommandID
+        nextCommandID &+= 1
+        pendingCommands[commandID] = continuation
+
+        var cArguments: [UnsafePointer<CChar>?] = arguments.map { argument in
+            UnsafePointer(strdup(argument))
+        }
+        cArguments.append(nil)
+        defer {
+            for argument in cArguments.compactMap(\.self) {
+                free(UnsafeMutablePointer(mutating: argument))
+            }
+        }
+
+        let status = mpv_command_async(handle, commandID, &cArguments)
+        guard status < 0 else { return }
+
+        pendingCommands.removeValue(forKey: commandID)?.resume(
+            throwing: MPVClientError.api(operation: arguments[0], code: status)
+        )
+    }
+
     func setFlag(name: String, value: Bool) {
         queue.async { [weak self] in
             guard let self, let handle else { return }
@@ -609,9 +675,24 @@ private extension MPVClientCore {
                 handleEndFile(event.pointee.data)
             case MPV_EVENT_LOG_MESSAGE:
                 handleLogMessage(event.pointee.data)
+            case MPV_EVENT_COMMAND_REPLY:
+                handleCommandReply(
+                    id: event.pointee.reply_userdata,
+                    error: event.pointee.error
+                )
             default:
                 break
             }
+        }
+    }
+
+    func handleCommandReply(id: UInt64, error: Int32) {
+        guard let continuation = pendingCommands.removeValue(forKey: id) else { return }
+
+        if error < 0 {
+            continuation.resume(throwing: MPVClientError.api(operation: "command", code: error))
+        } else {
+            continuation.resume()
         }
     }
 
@@ -731,6 +812,13 @@ private extension MPVClientCore {
     func destroyHandle() {
         guard let handle else { return }
         mpv_set_wakeup_callback(handle, nil, nil)
+
+        let continuations = Array(pendingCommands.values)
+        pendingCommands.removeAll()
+        for continuation in continuations {
+            continuation.resume(throwing: MPVClientError.terminated)
+        }
+
         mpv_terminate_destroy(handle)
         self.handle = nil
         isInitialized = false
@@ -739,11 +827,17 @@ private extension MPVClientCore {
         tracks = []
         layer = nil
     }
+}
 
-    func shutdownSynchronously() {
-        queue.sync {
-            destroyHandle()
-        }
+private final class MPVDetachedHandle: @unchecked Sendable {
+    private let handle: OpaquePointer
+
+    init(_ handle: OpaquePointer) {
+        self.handle = handle
+    }
+
+    func destroy() {
+        mpv_terminate_destroy(handle)
     }
 }
 

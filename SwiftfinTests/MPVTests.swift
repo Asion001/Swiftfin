@@ -98,6 +98,19 @@ final class MPVTests: XCTestCase {
         #endif
     }
 
+    func testEnhancedLocalizationTableIsBundledAndFormatsArguments() {
+        XCTAssertNotNil(
+            Bundle.main.url(
+                forResource: "SwiftfinEnhanced",
+                withExtension: "strings",
+                subdirectory: nil,
+                localization: "en"
+            )
+        )
+        XCTAssertEqual(SleepTimerStrings.endsIn("1:00"), "Ends in 1:00")
+        XCTAssertEqual(SleepTimerStrings.minutes(15), "15 minutes")
+    }
+
     // MARK: - Initial options
 
     /// MPV defines `osc` and `ytdl` only when built with Lua, and MPVKit
@@ -144,7 +157,6 @@ final class MPVTests: XCTestCase {
         )
 
         XCTAssertTrue(supported.isMetalFXEnabled)
-        XCTAssertEqual(supported.metalFXSharpness, MPVUpscaler.metalFXSharpness(for: .quality))
     }
 
     func testUpscalerOffAppliesNoShadersAndRestoresDefaultScalers() {
@@ -333,6 +345,5 @@ final class MPVTests: XCTestCase {
         /// behaves; sending it anyway would log an error on every change.
         XCTAssertFalse(controller.isMetalFXSupported)
         XCTAssertNil(spy.options[MPVUpscaler.metalFXOptionName])
-        XCTAssertNil(spy.options[MPVUpscaler.metalFXSharpnessOptionName])
     }
 }

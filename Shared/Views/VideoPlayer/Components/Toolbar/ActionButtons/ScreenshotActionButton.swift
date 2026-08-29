@@ -10,10 +10,10 @@
 import SwiftUI
 
 enum MPVScreenshotStrings {
-    static let title = String(localized: "mpv.screenshot.title", defaultValue: "Screenshot")
-    static let saved = String(localized: "mpv.screenshot.saved", defaultValue: "Screenshot saved to Files")
-    static let failed = String(localized: "mpv.screenshot.failed", defaultValue: "Could not save screenshot")
-    static let share = String(localized: "mpv.screenshot.share", defaultValue: "Share screenshot")
+    static let title = String(enhancedLocalized: "mpv.screenshot.title", defaultValue: "Screenshot")
+    static let saved = String(enhancedLocalized: "mpv.screenshot.saved", defaultValue: "Screenshot saved to Files")
+    static let failed = String(enhancedLocalized: "mpv.screenshot.failed", defaultValue: "Could not save screenshot")
+    static let share = String(enhancedLocalized: "mpv.screenshot.share", defaultValue: "Share screenshot")
 }
 
 extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
@@ -56,19 +56,17 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         private func takeScreenshot() {
             guard let proxy else { return }
 
-            do {
-                let url = try proxy.takeScreenshot(includeSubtitles: true)
-                toaster.present(MPVScreenshotStrings.saved, systemName: "camera.fill")
-
-                /// MPV writes asynchronously on its own queue, so the file is
-                /// not on disk the instant the command is queued. Offer sharing
-                /// only once it actually lands.
-                Task {
-                    guard await url.waitUntilExists() else { return }
+            Task {
+                do {
+                    // libmpv's command reply is delivered only after the
+                    // screenshot command has finished, so success and sharing
+                    // cannot race the file write.
+                    let url = try await proxy.takeScreenshot(includeSubtitles: true)
+                    toaster.present(MPVScreenshotStrings.saved, systemName: "camera.fill")
                     capture = ScreenshotCapture(url: url)
+                } catch {
+                    toaster.present(MPVScreenshotStrings.failed, systemName: "exclamationmark.triangle.fill")
                 }
-            } catch {
-                toaster.present(MPVScreenshotStrings.failed, systemName: "exclamationmark.triangle.fill")
             }
         }
     }
@@ -117,25 +115,6 @@ private struct ScreenshotShareSheet: View {
                 }
             }
         }
-    }
-}
-
-private extension URL {
-
-    /// Polls briefly for a file MPV is writing on another queue.
-    func waitUntilExists(
-        attempts: Int = 20,
-        interval: Duration = .milliseconds(100)
-    ) async -> Bool {
-        for _ in 0 ..< attempts {
-            if FileManager.default.fileExists(atPath: path) {
-                return true
-            }
-
-            try? await Task.sleep(for: interval)
-        }
-
-        return false
     }
 }
 #endif
