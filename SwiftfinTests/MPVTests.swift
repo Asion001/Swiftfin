@@ -9,6 +9,7 @@
 import Foundation
 import JellyfinAPI
 @testable import Swiftfin_iOS
+import SwiftUI
 import XCTest
 
 /// These run on the simulator in CI, where MoltenVK cannot present, so nothing
@@ -191,6 +192,22 @@ final class MPVTests: XCTestCase {
     }
 
     // MARK: - Configuration store
+
+    // MARK: - Subtitle colour
+
+    @MainActor
+    func testSubtitleColourIsFormattedTheWayMPVParsesIt() {
+
+        // Bare `RRGGBB` is what `Color.hexString` produces, and what MPV rejects
+        // with `Option sub-color: invalid color`. It wants a leading `#`, and it
+        // reads alpha first.
+        XCTAssertEqual(MPVMediaPlayerProxy.mpvColor(for: .white), "#FFFFFFFF")
+        XCTAssertEqual(MPVMediaPlayerProxy.mpvColor(for: .black), "#FF000000")
+        XCTAssertEqual(
+            MPVMediaPlayerProxy.mpvColor(for: Color(red: 1, green: 0, blue: 0).opacity(0.5)),
+            "#80FF0000"
+        )
+    }
 
     func testConfigurationStoreCreatesPrivateDirectoriesAndDefaultFiles() throws {
         let root = FileManager.default.temporaryDirectory

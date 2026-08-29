@@ -188,7 +188,7 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
             name: "sub-font-size",
             value: String(Int(EnhancedSubtitleGeometry.fontPointSize(for: configuration.size)))
         )
-        client.setOption(name: "sub-color", value: configuration.color.hexString)
+        client.setOption(name: "sub-color", value: Self.mpvColor(for: configuration.color))
         client.setOption(name: "sub-pos", value: String(position))
 
         /// MPV always applies the `sub-*` options to the formats it converts to
@@ -199,6 +199,24 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         /// signs, karaoke and typesetting in. `scale`, MPV's own default, keeps
         /// that intact while still honouring the position set above.
         client.setOption(name: "sub-ass-override", value: "scale")
+    }
+
+    /// A colour in the form MPV parses.
+    ///
+    /// `Color.hexString` returns bare `RRGGBB`, which MPV rejects outright —
+    /// `Option sub-color: invalid color: 'FFFFFF'` — so the subtitle colour never
+    /// reached the player. MPV wants a leading `#`, and puts alpha first.
+    static func mpvColor(for color: Color) -> String {
+        let components = color.rgbaComponents
+        let channel: (Double) -> Int = { Int((min(1, max(0, $0)) * 255).rounded()) }
+
+        return String(
+            format: "#%02X%02X%02X%02X",
+            channel(components.alpha),
+            channel(components.red),
+            channel(components.green),
+            channel(components.blue)
+        )
     }
 
     func takeScreenshot(includeSubtitles: Bool = true) throws -> URL {
@@ -230,8 +248,8 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     }
 
     /// See `MPVClientCore.synchronizeWithLayerSize()`: MPV cannot notice that the
-    /// layer it draws into was resized, so the view that resized it has to say so.
-    func layerDidChangeSize() {
+    /// layer it draws into was resized, so the view hosting it has to say so.
+    func layerDidLayOut() {
         client.synchronizeWithLayerSize()
     }
 
@@ -439,13 +457,17 @@ private final class MPVPlayerUIView: UIView {
 
         /// `layoutSubviews` runs on every frame of the animation that opens a
         /// supplement, and each accepted size costs MPV a swapchain.
-        guard drawableSize.width > 1,
-              drawableSize.height > 1,
-              drawableSize != metalLayer.drawableSize
-        else { return }
+        if drawableSize.width > 1,
+           drawableSize.height > 1,
+           drawableSize != metalLayer.drawableSize
+        {
+            metalLayer.drawableSize = drawableSize
+        }
 
-        metalLayer.drawableSize = drawableSize
-        proxy.layerDidChangeSize()
+        /// Told on every pass rather than only when the size changed here: MPV
+        /// can fall out of step with a layer this view never resized, and the
+        /// check on the other side is two property reads.
+        proxy.layerDidLayOut()
     }
 }
 
