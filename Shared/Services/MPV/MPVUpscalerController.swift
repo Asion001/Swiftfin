@@ -29,6 +29,11 @@ final class MPVUpscalerController: ObservableObject {
     @Published
     private(set) var missingShaders: [String] = []
 
+    /// Whether the unprocessed picture is being shown in place of the selection,
+    /// so the two can be compared without losing the selection to go back to.
+    @Published
+    private(set) var isComparingBaseline = false
+
     @Published
     var requestedProvider: VideoEnhancementProvider {
         didSet {
@@ -66,8 +71,23 @@ final class MPVUpscalerController: ObservableObject {
         }
     }
 
+    /// Shows, or stops showing, the picture with no upscaling applied.
+    ///
+    /// Deliberately does not touch `requestedProvider` or `requestedMode`: those
+    /// are the user's selection, they are persisted, and comparing against a
+    /// baseline should not overwrite them.
+    func setComparingBaseline(_ isComparing: Bool) {
+        guard isComparing != isComparingBaseline else { return }
+        isComparingBaseline = isComparing
+        apply()
+    }
+
     /// A short description of what is actually running, for the stats page.
     var activeDescription: String {
+        if isComparingBaseline {
+            return VideoEnhancementMode.off.displayTitle
+        }
+
         guard let activeLevel else {
             return VideoEnhancementMode.off.displayTitle
         }
@@ -125,11 +145,13 @@ final class MPVUpscalerController: ObservableObject {
     func apply() {
         guard let client else { return }
 
-        let configuration = MPVUpscaler.configuration(
-            provider: requestedProvider,
-            level: activeLevel,
-            isMetalFXSupported: isMetalFXSupported
-        )
+        let configuration = isComparingBaseline
+            ? MPVUpscaler.Configuration.disabled
+            : MPVUpscaler.configuration(
+                provider: requestedProvider,
+                level: activeLevel,
+                isMetalFXSupported: isMetalFXSupported
+            )
 
         var missing: [String] = []
         let shaderPaths = configuration.shaders.compactMap { name -> String? in

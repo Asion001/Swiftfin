@@ -365,6 +365,33 @@ final class MPVTests: XCTestCase {
     }
 
     @MainActor
+    func testComparingShowsTheBaselineAndRestoresTheSelectionWithoutChangingIt() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+        controller.attach(to: spy)
+
+        controller.requestedProvider = .shader
+        controller.requestedMode = .balanced
+        let selected = spy.shaders
+        XCTAssertFalse(selected.isEmpty)
+
+        controller.setComparingBaseline(true)
+
+        /// Comparing has to reach the player — a control that only changes a
+        /// label proves nothing about the picture.
+        XCTAssertTrue(spy.shaders.isEmpty)
+        XCTAssertEqual(spy.options["scale"], "lanczos")
+
+        /// ...and it must not consume the selection it is being compared
+        /// against, or there would be nothing to go back to.
+        XCTAssertEqual(controller.requestedProvider, .shader)
+        XCTAssertEqual(controller.requestedMode, .balanced)
+
+        controller.setComparingBaseline(false)
+        XCTAssertEqual(spy.shaders, selected)
+    }
+
+    @MainActor
     func testTurningTheUpscalerOffRestoresDefaultScalers() {
         let spy = ClientSpy()
         let controller = MPVUpscalerController()
