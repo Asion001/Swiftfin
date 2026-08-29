@@ -237,9 +237,11 @@ private extension MPVMediaPlayerProxy {
 
         // A stopped MPV context is intentionally destroyed. Re-attaching here
         // makes a proxy that receives another item usable instead of leaving a
-        // queued URL with no context and presenting a black surface.
+        // queued URL with no context and presenting a black surface. This goes
+        // through `attach(to:)` so the new context is configured exactly like a
+        // first attach, upscaler options included.
         if let metalLayer {
-            client.attach(to: metalLayer)
+            attach(to: metalLayer)
         }
 
         let audioIndex = item.indexMap.playerIndex(for: item.selectedAudioStreamIndex)

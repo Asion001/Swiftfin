@@ -34,10 +34,13 @@ guard let localizationContent = try? String(contentsOfFile: localizationFile, en
     exit(1)
 }
 
-guard let enhancedLocalizationContent = try? String(
-    contentsOfFile: enhancedLocalizationFile,
-    encoding: .utf8
-) else {
+// This table is checked in as UTF-8, but Xcode rewrites `.strings` files as
+// UTF-16 when they are edited through its editor. Accept either encoding so an
+// Xcode edit does not fail this check with an unreadable-file error.
+let enhancedLocalizationContent = (try? String(contentsOfFile: enhancedLocalizationFile, encoding: .utf8))
+    ?? (try? String(contentsOfFile: enhancedLocalizationFile, encoding: .utf16))
+
+guard let enhancedLocalizationContent else {
     print("Unable to read localization file at \(enhancedLocalizationFile)")
     exit(1)
 }
@@ -199,6 +202,7 @@ if unusedEnhancedKeys.isEmpty {
         let updatedContent = sortedKeys
             .map { "\"\($0)\" = \"\(enhancedLocalizationEntries[$0]!)\";" }
             .joined(separator: "\n")
+            .appending("\n")
 
         do {
             try updatedContent.write(

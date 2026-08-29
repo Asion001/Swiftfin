@@ -108,6 +108,13 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     }
 
     deinit {
+        // Nothing can await these once `self` is gone, so they are failed here
+        // rather than left suspended forever.
+        for continuation in pendingCommands.values {
+            continuation.resume(throwing: MPVClientError.terminated)
+        }
+        pendingCommands.removeAll()
+
         guard let handle else { return }
 
         // Normal playback teardown calls `shutdown()` and reaches deinit only
