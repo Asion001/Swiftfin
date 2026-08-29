@@ -180,6 +180,20 @@ struct VideoPlayer: View {
 
             toaster.present(message, systemName: "moon.zzz.fill")
         }
+        #if os(iOS)
+        .overlay(alignment: .top) {
+            /// Kept clear of the playback controls and of the bottom of the
+            /// frame, which is where subtitles are drawn.
+            if let controller = (manager.proxy as? MPVMediaPlayerProxy)?.upscaler,
+               controller.isComparing
+            {
+                UpscalerCompareBar(controller: controller)
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: (manager.proxy as? MPVMediaPlayerProxy)?.upscaler.isComparing)
+        #endif
         .sheet(item: $containerState.presentedModal) { modal in
             Group {
                 switch modal {

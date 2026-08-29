@@ -29,6 +29,13 @@ final class MPVUpscalerController: ObservableObject {
     @Published
     private(set) var missingShaders: [String] = []
 
+    /// Whether the compare control is up.
+    ///
+    /// Separate from which side is showing: comparing is a mode you enter and
+    /// leave, and while in it either side can be on screen.
+    @Published
+    private(set) var isComparing = false
+
     /// Whether the unprocessed picture is being shown in place of the selection,
     /// so the two can be compared without losing the selection to go back to.
     @Published
@@ -76,10 +83,25 @@ final class MPVUpscalerController: ObservableObject {
     /// Deliberately does not touch `requestedProvider` or `requestedMode`: those
     /// are the user's selection, they are persisted, and comparing against a
     /// baseline should not overwrite them.
-    func setComparingBaseline(_ isComparing: Bool) {
-        guard isComparing != isComparingBaseline else { return }
-        isComparingBaseline = isComparing
+    func setComparingBaseline(_ isShowingBaseline: Bool) {
+        guard isShowingBaseline != isComparingBaseline else { return }
+        isComparingBaseline = isShowingBaseline
         apply()
+    }
+
+    func startComparing() {
+        isComparing = true
+    }
+
+    /// Leaves the comparison, always on the user's own selection rather than
+    /// wherever the last toggle happened to leave it.
+    func stopComparing() {
+        isComparing = false
+        setComparingBaseline(false)
+    }
+
+    func toggleComparedSide() {
+        setComparingBaseline(!isComparingBaseline)
     }
 
     /// A short description of what is actually running, for the stats page.

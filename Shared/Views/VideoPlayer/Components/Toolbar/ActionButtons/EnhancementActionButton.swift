@@ -70,30 +70,10 @@ struct MPVUpscalerSettingsView: View {
                 }
 
                 Section {
-                    Button {} label: {
-                        HStack {
-                            Text(VideoEnhancementStrings.compare)
-                            Spacer()
-                            if controller.isComparingBaseline {
-                                Text(VideoEnhancementStrings.comparing)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                    Button(VideoEnhancementStrings.compare) {
+                        controller.startComparing()
+                        dismiss()
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(.rect)
-                    /// A press gesture rather than a toggle: comparing is only
-                    /// useful while both pictures are fresh in mind, and holding
-                    /// puts the selection back the moment it is released.
-                    .highPriorityGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                controller.setComparingBaseline(true)
-                            }
-                            .onEnded { _ in
-                                controller.setComparingBaseline(false)
-                            }
-                    )
                 } footer: {
                     Text(VideoEnhancementStrings.compareFooter)
                 }
@@ -112,11 +92,6 @@ struct MPVUpscalerSettingsView: View {
                         )
                     }
                 }
-            }
-            .onDisappear {
-                /// A hold interrupted by the sheet going away would otherwise
-                /// leave the baseline showing with no way back to the selection.
-                controller.setComparingBaseline(false)
             }
             .navigationTitle(VideoEnhancementStrings.title)
             .navigationBarTitleDisplayMode(.inline)
