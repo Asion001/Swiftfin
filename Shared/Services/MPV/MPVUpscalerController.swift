@@ -104,6 +104,20 @@ final class MPVUpscalerController: ObservableObject {
         setComparingBaseline(!isComparingBaseline)
     }
 
+    /// Whether the selection resolves to anything the baseline does not.
+    ///
+    /// A MetalFX selection on a build without the patch resolves to no upscaling
+    /// at all, and every tier resolves to the same thing, so a comparison can be
+    /// between two identical pictures without that being obvious from the
+    /// controls.
+    var isSelectionEffective: Bool {
+        MPVUpscaler.configuration(
+            provider: requestedProvider,
+            level: activeLevel,
+            isMetalFXSupported: isMetalFXSupported
+        ) != .disabled
+    }
+
     /// A short description of what is actually running, for the stats page.
     var activeDescription: String {
         if isComparingBaseline {

@@ -21,6 +21,23 @@ struct UpscalerCompareBar: View {
     var controller: MPVUpscalerController
 
     var body: some View {
+        VStack(spacing: 6) {
+            controls
+
+            /// Said plainly rather than left to be inferred from two identical
+            /// pictures, which is indistinguishable from a broken comparison.
+            if !controller.isSelectionEffective {
+                Text(VideoEnhancementStrings.compareIneffective)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var controls: some View {
         HStack(spacing: 12) {
             Button {
                 controller.toggleComparedSide()

@@ -268,7 +268,14 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
                 return
             }
 
-            completion(getString(handle: handle, name: "option-info/\(name)/name") != nil)
+            let isSupported = getString(handle: handle, name: "option-info/\(name)/name") != nil
+
+            /// Whether the patched build is actually running decides whether the
+            /// MetalFX selection does anything at all, and a build without it
+            /// silently resolves every tier to no upscaling — which looks exactly
+            /// like an upscaler that changes nothing.
+            emit(.log("MPV option \(name) is \(isSupported ? "available" : "absent")"))
+            completion(isSupported)
         }
     }
 
@@ -445,6 +452,18 @@ private extension MPVClientCore {
 
     func applyUpscalerIfPossible(_ application: MPVUpscaler.Application) {
         guard let handle else { return }
+
+        /// What was actually sent, so that "the picture does not change" can be
+        /// told apart from "nothing was asked to change". Rate limited alongside
+        /// the applications themselves, so this is one line per real change.
+        emit(
+            .log(
+                "Upscaler: metalfx=\(application.isMetalFXEnabled.map(String.init) ?? "unsupported"), "
+                    + "shaders=\(application.shaders.count), "
+                    + "scale=\(application.options["scale"] ?? "-"), "
+                    + "dither-depth=\(application.options["dither-depth"] ?? "-")"
+            )
+        )
 
         if application.isMetalFXEnabled != nil {
             reportIfFailed(

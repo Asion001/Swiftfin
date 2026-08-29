@@ -13,6 +13,7 @@
 "enhancement.bypass.thermal" = "Paused while the device cools down";
 "enhancement.compare" = "Compare";
 "enhancement.compare-footer" = "Closes this and leaves a control over the video for switching the upscaler on and off. The selection above is not changed.";
+"enhancement.compare-ineffective" = "Both sides are the same: the current selection is not upscaling anything.";
 "enhancement.energy-warning" = "Real-time upscaling uses the GPU and may increase battery use and device temperature.";
 "enhancement.metalfx-unavailable" = "MetalFX needs Swiftfin's enhanced MPV build. This build will use the original picture instead.";
 "enhancement.missing-shaders" = "These shader files are missing from this build: %@";
