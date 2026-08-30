@@ -23,6 +23,17 @@
       "versions": [
         {
           "version": "2026.8.30",
+          "buildVersion": "1788079626",
+          "marketingVersion": "Enhanced 2026.8.30 (1788079626)",
+          "date": "2026-08-30T08:47:06Z",
+          "localizedDescription": "Automated build from f6d86dc. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.30-1788079626/Swiftfin-Enhanced.ipa",
+          "size": 196463863,
+          "sha256": "e9f6dd160cc7f5425a5bee68d293bbe9525bf5f8f035a09158bfb84d9e7589ea",
+          "minOSVersion": "18.6"
+        },
+        {
+          "version": "2026.8.30",
           "buildVersion": "1788074683",
           "marketingVersion": "Enhanced 2026.8.30 (1788074683)",
           "date": "2026-08-30T07:24:43Z",
@@ -228,17 +239,6 @@
           "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787520069/Swiftfin-Enhanced.ipa",
           "size": 182787558,
           "sha256": "69629c4fbf48d638f574057ddcd1c001ea77ec2ccd8ad80c13e40fa64955241d",
-          "minOSVersion": "18.6"
-        },
-        {
-          "version": "2026.8.23",
-          "buildVersion": "1787514010",
-          "marketingVersion": "Enhanced 2026.8.23 (1787514010)",
-          "date": "2026-08-23T19:40:10Z",
-          "localizedDescription": "Automated build from db73852 with thermally adaptive Anime4K Metal enhancement, realtime quality profiles, duplicate-render and offscreen-fill suppression, source-FPS frame pacing, bounded processing buffering, PiP resource suspension, customizable text-subtitle positioning, playback sleep timer, and current upstream Swiftfin changes.",
-          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787514010/Swiftfin-Enhanced.ipa",
-          "size": 183149178,
-          "sha256": "0ea11e8f4a7dde925ad840f48db3153b96ef6c0717ec825a066957353a4dd31f",
           "minOSVersion": "18.6"
         }
       ],
