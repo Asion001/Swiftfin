@@ -448,6 +448,36 @@ private extension MPVClientCore {
 
         guard let upscalerApplication else { return }
         applyUpscalerIfPossible(upscalerApplication)
+
+        /// Reported after the pipeline has had time to render with the new
+        /// settings. Whether an upscaler is selected and whether it actually
+        /// runs are different questions — MetalFX declines silently when it
+        /// cannot help, and a user shader that never loads costs nothing and
+        /// says nothing — and only the pass list answers the second one.
+        queue.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.reportRenderPasses()
+        }
+    }
+
+    /// Logs the render passes MPV last drew a frame with.
+    ///
+    /// `vo_gpu_next` collects these unconditionally, so this needs nothing
+    /// enabled beforehand. Reading blocks on MPV's core thread, so it runs once
+    /// per applied pipeline rather than on any regular schedule.
+    func reportRenderPasses() {
+        guard let handle else { return }
+
+        let count = Int(getInt64(handle: handle, name: "vo-passes/fresh/count") ?? 0)
+        guard count > 0 else {
+            emit(.log("Render passes: none reported"))
+            return
+        }
+
+        let descriptions = (0 ..< count).compactMap {
+            getString(handle: handle, name: "vo-passes/fresh/\($0)/desc")
+        }
+
+        emit(.log("Render passes: \(descriptions.joined(separator: " | "))"))
     }
 
     func applyUpscalerIfPossible(_ application: MPVUpscaler.Application) {
