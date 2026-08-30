@@ -22,6 +22,17 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "2026.8.30",
+          "buildVersion": "1788074683",
+          "marketingVersion": "Enhanced 2026.8.30 (1788074683)",
+          "date": "2026-08-30T07:24:43Z",
+          "localizedDescription": "Automated build from 12d66b3. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.30-1788074683/Swiftfin-Enhanced.ipa",
+          "size": 196463146,
+          "sha256": "5d4f25d20b55d99db7b00185ac5b658ebfad61c4ada68d033f97ede26443efa4",
+          "minOSVersion": "18.6"
+        },
+        {
           "version": "2026.8.29",
           "buildVersion": "1788038251",
           "marketingVersion": "Enhanced 2026.8.29 (1788038251)",
@@ -228,17 +239,6 @@
           "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787514010/Swiftfin-Enhanced.ipa",
           "size": 183149178,
           "sha256": "0ea11e8f4a7dde925ad840f48db3153b96ef6c0717ec825a066957353a4dd31f",
-          "minOSVersion": "18.6"
-        },
-        {
-          "version": "2026.8.23",
-          "buildVersion": "1787509700",
-          "marketingVersion": "Enhanced 2026.8.23 (1787509700)",
-          "date": "2026-08-23T18:28:20Z",
-          "localizedDescription": "Automated build from a8c6659 with Anime4K Metal enhancement, source-FPS frame pacing, bounded processing buffering, PiP resource suspension, customizable text-subtitle positioning, playback sleep timer, and current upstream Swiftfin changes.",
-          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787509700/Swiftfin-Enhanced.ipa",
-          "size": 183146527,
-          "sha256": "8bdd493b704a6c3467c92bf0042fad5dc05f99caf280b11e7773b477a0ffdebf",
           "minOSVersion": "18.6"
         }
       ],
