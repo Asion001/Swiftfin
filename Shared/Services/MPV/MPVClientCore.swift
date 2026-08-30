@@ -66,6 +66,32 @@ protocol MPVOptionConfigurable: AnyObject, Sendable {
     func probeOption(named name: String, completion: @escaping @Sendable (Bool) -> Void)
 }
 
+/// Reads the pass names out of what `vo-passes` prints.
+///
+/// Separated so the parsing is testable: the property can only be read whole,
+/// and a misread reports as an empty pass list, which is indistinguishable from
+/// a renderer that ran no passes — the exact thing the list exists to rule out.
+enum MPVRenderPasses {
+
+    /// The printed form is `fresh:`, then `- <name>: last …us avg …us peak …us`
+    /// per pass, then the same again under `redraw:`. Only the fresh ones
+    /// describe the frame just drawn.
+    static func names(from summary: String) -> [String] {
+        summary
+            .components(separatedBy: "redraw:")
+            .first?
+            .split(separator: "\n")
+            .compactMap { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard trimmed.hasPrefix("- ") else { return nil }
+
+                let body = trimmed.dropFirst(2)
+                let name = body.prefix { $0 != ":" }
+                return name.isEmpty ? nil : String(name)
+            } ?? []
+    }
+}
+
 /// A serialized libmpv owner. Normal client calls and event draining share one
 /// queue; rendering is performed internally by MPV's MoltenVK video output.
 /// This avoids the callback/client-thread deadlocks documented by libmpv.
@@ -464,20 +490,28 @@ private extension MPVClientCore {
     /// `vo_gpu_next` collects these unconditionally, so this needs nothing
     /// enabled beforehand. Reading blocks on MPV's core thread, so it runs once
     /// per applied pipeline rather than on any regular schedule.
+    ///
+    /// Read whole. `vo-passes` answers only `GET` and `PRINT` and returns
+    /// `M_PROPERTY_NOT_IMPLEMENTED` for anything else, so a sub-path such as
+    /// `vo-passes/fresh/count` cannot be read at all — which reports as no
+    /// passes rather than as a failure, and is indistinguishable from a
+    /// renderer that ran none.
     func reportRenderPasses() {
         guard let handle else { return }
 
-        let count = Int(getInt64(handle: handle, name: "vo-passes/fresh/count") ?? 0)
-        guard count > 0 else {
+        guard let summary = getString(handle: handle, name: "vo-passes") else {
+            emit(.log("Render passes: unavailable"))
+            return
+        }
+
+        let passes = MPVRenderPasses.names(from: summary)
+
+        guard passes.isNotEmpty else {
             emit(.log("Render passes: none reported"))
             return
         }
 
-        let descriptions = (0 ..< count).compactMap {
-            getString(handle: handle, name: "vo-passes/fresh/\($0)/desc")
-        }
-
-        emit(.log("Render passes: \(descriptions.joined(separator: " | "))"))
+        emit(.log("Render passes: \(passes.joined(separator: " | "))"))
     }
 
     func applyUpscalerIfPossible(_ application: MPVUpscaler.Application) {

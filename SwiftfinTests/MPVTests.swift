@@ -446,6 +446,32 @@ final class MPVTests: XCTestCase {
         XCTAssertFalse(controller.isSelectionEffective)
     }
 
+    // MARK: - Render passes
+
+    func testRenderPassNamesAreReadFromWhatMPVPrints() {
+        let summary = [
+            "fresh:",
+            "- upload plane 0: last 91us avg 88us peak 210us",
+            "- ArtCNN_C4F16: last 1204us avg 1180us peak 2400us",
+            "- output: last 300us avg 290us peak 700us",
+            "",
+            "redraw:",
+            "- output: last 12us avg 11us peak 40us",
+        ].joined(separator: "\n")
+
+        /// Only the fresh passes describe the frame just drawn, and a redraw
+        /// pass sharing a name must not be counted among them.
+        XCTAssertEqual(
+            MPVRenderPasses.names(from: summary),
+            ["upload plane 0", "ArtCNN_C4F16", "output"]
+        )
+
+        /// An empty list has to come back empty rather than as a line of noise,
+        /// since it is what says the renderer ran nothing.
+        XCTAssertTrue(MPVRenderPasses.names(from: "fresh:\n\nredraw:\n").isEmpty)
+        XCTAssertTrue(MPVRenderPasses.names(from: "").isEmpty)
+    }
+
     @MainActor
     func testTurningTheUpscalerOffRestoresDefaultScalers() {
         let spy = ClientSpy()
