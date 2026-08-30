@@ -28,7 +28,7 @@ extension DownloadTaskView {
         var downloadTask: DownloadTask
 
         @State
-        private var isPresentingVideoPlayerTypeError: Bool = false
+        private var isPresentingPlaybackError = false
 
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
@@ -84,16 +84,7 @@ extension DownloadTaskView {
                         }
                     case .complete:
                         Button(L10n.play) {
-                            #if !targetEnvironment(macCatalyst)
-                            if Defaults[.VideoPlayer.videoPlayerType] == .swiftfin {
-                                router.dismiss()
-//                                    router.route(to: .videoPlayer(manager: DownloadVideoPlayerManager(downloadTask: downloadTask)))
-                            } else {
-                                isPresentingVideoPlayerTypeError = true
-                            }
-                            #else
-                            isPresentingVideoPlayerTypeError = true
-                            #endif
+                            playOffline()
                         }
                         .frame(maxWidth: 300)
                         .frame(height: 50)
@@ -102,15 +93,30 @@ extension DownloadTaskView {
             }
             .alert(
                 L10n.error,
-                isPresented: $isPresentingVideoPlayerTypeError
+                isPresented: $isPresentingPlaybackError
             ) {
                 Button {
-                    isPresentingVideoPlayerTypeError = false
+                    isPresentingPlaybackError = false
                 } label: {
                     Text(L10n.dismiss)
                 }
             } message: {
-                Text(L10n.downloadedPlayerWarning)
+                Text(L10n.unableToLoadThisItem)
+            }
+        }
+
+        private func playOffline() {
+            guard let provider = downloadTask.offlineMediaPlayerItemProvider else {
+                isPresentingPlaybackError = true
+                return
+            }
+
+            router.dismiss()
+
+            if provider.item.type == .audio || provider.item.type == .audioBook {
+                NavigationRoute.musicPlayer(provider: provider)
+            } else {
+                router.route(to: .videoPlayer(provider: provider))
             }
         }
     }

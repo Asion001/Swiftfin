@@ -121,7 +121,10 @@ final class MusicMediaPlayerQueue: ViewModel, MediaPlayerQueue {
     }
 
     private static func resolveParent(for item: BaseItemDto, parent: BaseItemDto?) -> BaseItemDto? {
-        if let parent, parent.type == .musicAlbum || parent.type == .musicArtist {
+        if let parent,
+           let parentType = parent.type,
+           [.musicAlbum, .musicArtist, .musicGenre, .playlist].contains(parentType)
+        {
             return parent
         }
 
@@ -237,6 +240,12 @@ extension MusicMediaPlayerQueue {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(items.enumerated()), id: \.element) { offset, item in
+                            if offset == 0, currentIndex > 0 {
+                                sectionHeader(L10n.recentlyPlayed)
+                            } else if offset == currentIndex + 1 {
+                                sectionHeader(L10n.nextUp)
+                            }
+
                             MusicQueueRow(
                                 item: item,
                                 fallbackIndex: offset + 1,
@@ -248,9 +257,11 @@ extension MusicMediaPlayerQueue {
                                 dismiss()
                             }
                             .id(scrollID(for: item))
+                            .if(offset < items.count - 1 && offset != currentIndex) { row in
+                                row.withViewContext(.isListRowSeparatorVisible)
+                            }
                         }
                     }
-                    .withViewContext(.isListRowSeparatorVisible)
                     .padding(.bottom, EdgeInsets.edgePadding)
                 }
                 .onAppear {
@@ -262,6 +273,22 @@ extension MusicMediaPlayerQueue {
                     }
                 }
             }
+        }
+
+        private var currentIndex: Int {
+            items.firstIndex { $0.id == queue.currentItemID } ?? 0
+        }
+
+        private func sectionHeader(_ title: String) -> some View {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, EdgeInsets.edgePadding)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
         }
 
         private func scrollID(for item: BaseItemDto) -> AnyHashable {

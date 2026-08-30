@@ -6,8 +6,11 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import AVKit
 import Defaults
 import FactoryKit
+import JellyfinAPI
+import MediaPlayer
 import SwiftUI
 
 extension View {
@@ -26,6 +29,8 @@ private struct MusicPlayerPopupModifier: ViewModifier {
     private var isPopupOpen = false
     @State
     private var manager: MediaPlayerManager?
+    @StateObject
+    private var sleepTimerController = SleepTimerController()
 
     /// The proxy is owned here rather than by the popup so that playback starts
     /// with the mini player and survives the popup being collapsed.
@@ -35,6 +40,10 @@ private struct MusicPlayerPopupModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .environment(
+                \.musicPlayerBottomInset,
+                manager == nil || isPopupOpen ? 0 : MusicPlayerMiniPlayer.height
+            )
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let manager, !isPopupOpen {
                     MusicPlayerMiniPlayer(
@@ -51,7 +60,7 @@ private struct MusicPlayerPopupModifier: ViewModifier {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .sheet(isPresented: $isPopupOpen) {
+            .fullScreenCover(isPresented: $isPopupOpen) {
                 if let manager, let proxy {
                     MusicPlayerPopupView(
                         manager: manager,
@@ -59,6 +68,8 @@ private struct MusicPlayerPopupModifier: ViewModifier {
                         isPopupOpen: $isPopupOpen
                     )
                     .id(ObjectIdentifier(manager))
+                    .environmentObject(manager)
+                    .environmentObject(sleepTimerController)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: manager != nil)
@@ -70,13 +81,16 @@ private struct MusicPlayerPopupModifier: ViewModifier {
     private func receive(_ newManager: MediaPlayerManager?) {
         let previousManager = manager
 
-        if let newManager, newManager.item.type == .audio {
+        if let newManager, [.audio, .audioBook].contains(newManager.item.type) {
             manager = newManager
 
             if previousManager !== newManager {
+                sleepTimerController.invalidate()
+                sleepTimerController.attach(to: newManager)
                 attachProxy(to: newManager)
             }
         } else {
+            sleepTimerController.invalidate()
             manager = nil
             proxy = nil
             isPopupOpen = false
@@ -108,13 +122,15 @@ private struct MusicPlayerPopupModifier: ViewModifier {
 
 private struct MusicPlayerMiniPlayer: View {
 
+    static let height: CGFloat = 72
+
     @ObservedObject
     private var manager: MediaPlayerManager
     @ObservedObject
     private var seconds: PublishedBox<Duration>
 
     @State
-    private var artwork: UIImage?
+    private var isShowingTechnicalDetails = false
 
     let openPlayer: () -> Void
     let stop: () -> Void
@@ -151,8 +167,27 @@ private struct MusicPlayerMiniPlayer: View {
         return clamp(seconds.value.seconds / runtime, min: 0, max: 1)
     }
 
-    private var artworkTaskID: String {
-        manager.item.id ?? manager.item.displayTitle
+    private var technicalSummary: String? {
+        guard let playbackItem = manager.playbackItem else { return nil }
+        let stream = playbackItem.audioStreams.first { $0.index == playbackItem.selectedAudioStreamIndex }
+            ?? playbackItem.audioStreams.first
+
+        let values = [
+            stream?.codec?.uppercased() ?? playbackItem.mediaSource.container?.uppercased(),
+            stream?.bitRate.map { $0.formatted(.bitRate) }
+                ?? playbackItem.mediaSource.bitrate.map { $0.formatted(.bitRate) },
+        ]
+            .compactMap(\.self)
+
+        return values.isEmpty ? nil : values.joined(separator: " · ")
+    }
+
+    private var subtitle: String? {
+        if isShowingTechnicalDetails, let technicalSummary {
+            return technicalSummary
+        }
+
+        return artist
     }
 
     var body: some View {
@@ -163,17 +198,11 @@ private struct MusicPlayerMiniPlayer: View {
             HStack(spacing: 12) {
                 Button(action: openPlayer) {
                     HStack(spacing: 12) {
-                        Group {
-                            if let artwork {
-                                Image(uiImage: artwork)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } else {
-                                Image(systemName: "music.note")
-                                    .font(.title2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        MusicPlayerArtwork(
+                            item: manager.item,
+                            playbackItem: manager.playbackItem
+                        )
+                        .id(manager.item.id)
                         .frame(width: 46, height: 46)
                         .background(.quaternary)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -185,8 +214,8 @@ private struct MusicPlayerMiniPlayer: View {
                                 .foregroundStyle(.primary)
                                 .lineLimit(1)
 
-                            if let artist, artist.isNotEmpty {
-                                Text(artist)
+                            if let subtitle, subtitle.isNotEmpty {
+                                Text(subtitle)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -197,6 +226,23 @@ private struct MusicPlayerMiniPlayer: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+
+                Button {
+                    isShowingTechnicalDetails.toggle()
+                } label: {
+                    Image(systemName: isShowingTechnicalDetails ? "info.circle.fill" : "info.circle")
+                        .frame(width: 30, height: 44)
+                }
+                .buttonStyle(.plain)
+                .disabled(technicalSummary == nil)
+                .accessibilityLabel(L10n.details)
+
+                if let queue = manager.queue {
+                    MusicPlayerPopupPreviousButton(
+                        manager: manager,
+                        queue: queue
+                    )
+                }
 
                 Button {
                     manager.togglePlayPause()
@@ -228,27 +274,67 @@ private struct MusicPlayerMiniPlayer: View {
         .overlay(alignment: .top) {
             Divider()
         }
-        .task(id: artworkTaskID) {
-            let item = manager.item
-            artwork = nil
-            let newArtwork = await item.getNowPlayingImage()
+        .frame(height: Self.height)
+    }
+}
 
-            guard !Task.isCancelled, manager.item.id == item.id else { return }
-            artwork = newArtwork
+private struct MusicPlayerArtwork: View {
+
+    let item: BaseItemDto
+    let playbackItem: MediaPlayerItem?
+    var onImage: ((UIImage) -> Void)?
+
+    @State
+    private var image: UIImage?
+
+    private var taskID: String {
+        playbackItem?.baseItem.id ?? item.id ?? item.displayTitle
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                PosterImage(
+                    item: item,
+                    type: .square,
+                    size: .medium,
+                    contentMode: .fill
+                )
+            }
+        }
+        .task(id: taskID) {
+            image = nil
+            let loadedImage: UIImage? = if let thumbnailProvider = playbackItem?.thumbnailProvider {
+                await thumbnailProvider()
+            } else {
+                await item.getNowPlayingImage()
+            }
+            guard !Task.isCancelled else { return }
+            image = loadedImage
+
+            if let loadedImage {
+                onImage?(loadedImage)
+            }
         }
     }
 }
 
 private struct MusicPlayerPopupView: View {
 
-    @Environment(\.horizontalSizeClass)
-    private var horizontalSizeClass
+    @EnvironmentObject
+    private var sleepTimerController: SleepTimerController
 
     @Binding
     private var isPopupOpen: Bool
     @ObservedObject
     private var manager: MediaPlayerManager
 
+    @State
+    private var isMediaInfoPresented = false
     @State
     private var isQueuePresented = false
 
@@ -282,6 +368,28 @@ private struct MusicPlayerPopupView: View {
         return album
     }
 
+    private var selectedAudioStream: MediaStream? {
+        guard let playbackItem = manager.playbackItem else { return nil }
+
+        return playbackItem.audioStreams.first { $0.index == playbackItem.selectedAudioStreamIndex }
+            ?? playbackItem.audioStreams.first
+    }
+
+    private var technicalDetails: [String] {
+        guard let playbackItem = manager.playbackItem else { return [] }
+        let stream = selectedAudioStream
+
+        return [
+            stream?.codec?.uppercased() ?? playbackItem.mediaSource.container?.uppercased(),
+            stream?.bitRate.map { $0.formatted(.bitRate) }
+                ?? playbackItem.mediaSource.bitrate.map { $0.formatted(.bitRate) },
+            stream?.sampleRate.map { "\($0.formatted()) Hz" },
+            stream?.bitDepth.map { "\($0.formatted()) bit" },
+            stream?.channels.map { "\($0.formatted()) ch" },
+        ]
+            .compactMap(\.self)
+    }
+
     @ViewBuilder
     private var header: some View {
         HStack(spacing: 0) {
@@ -301,6 +409,18 @@ private struct MusicPlayerPopupView: View {
                 .fontWeight(.semibold)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
+
+            Button {
+                isMediaInfoPresented = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.headline)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(manager.playbackItem == nil)
+            .accessibilityLabel(L10n.details)
 
             Button {
                 isQueuePresented = true
@@ -333,20 +453,14 @@ private struct MusicPlayerPopupView: View {
 
     @ViewBuilder
     private var albumArtwork: some View {
-        ImageView(
-            manager.item.squareImageSources(
-                environment: .init()
-            )
+        MusicPlayerArtwork(
+            item: manager.item,
+            playbackItem: manager.playbackItem,
+            onImage: { resolveColor(from: $0, binding: $resolvedColor) }
         )
-        .image { (image: UIImage) in
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .onAppear {
-                    resolveColor(from: image, binding: $resolvedColor)
-                }
-        }
-        .frame(maxWidth: 460)
+        .id(manager.item.id)
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(.rect(cornerRadius: 20, style: .continuous))
         .scaleEffect(manager.playbackRequestStatus == .playing ? 1 : 0.92)
         .subtleShadow()
         .animation(
@@ -377,6 +491,20 @@ private struct MusicPlayerPopupView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+
+            if technicalDetails.isNotEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 7) {
+                        ForEach(technicalDetails, id: \.self) { detail in
+                            Text(detail)
+                                .font(.caption2.monospaced())
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
+                    }
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -396,6 +524,35 @@ private struct MusicPlayerPopupView: View {
                 isBuffering: proxy.isBuffering
             )
 
+            MusicPlayerVolumeControl()
+
+            HStack(spacing: 20) {
+                VideoPlayer.PlaybackControls.Toolbar.ActionButtons.SleepTimer()
+                    .labelStyle(.iconOnly)
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel(SleepTimerStrings.title)
+
+                Button {
+                    isMediaInfoPresented = true
+                } label: {
+                    Image(systemName: "waveform.badge.magnifyingglass")
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .disabled(manager.playbackItem == nil)
+                .accessibilityLabel(L10n.details)
+
+                if manager.item.canBeDownloaded {
+                    MediaDownloadButton(item: manager.item)
+                        .id(manager.item.id)
+                }
+
+                MusicPlayerRoutePicker()
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel(L10n.audio)
+            }
+            .font(.title3)
+
             if let queue = manager.queue {
                 MusicPlayerQueueButton(
                     queue: queue,
@@ -406,24 +563,28 @@ private struct MusicPlayerPopupView: View {
     }
 
     @ViewBuilder
-    private var playerContent: some View {
-        if horizontalSizeClass == .regular {
-            ImageContentColumnsLayout(
-                idealContentWidth: 520,
-                imageAspectRatio: 1,
-                imageColumnFraction: 0.5,
-                spacing: EdgeInsets.edgePadding * 2
-            ) {
+    private func playerContent(in size: CGSize) -> some View {
+        let isWide = size.width >= 760 && size.width > size.height * 1.05
+
+        if isWide {
+            HStack(spacing: min(56, EdgeInsets.edgePadding * 2)) {
                 albumArtwork
+                    .frame(maxWidth: min(480, size.height - 120))
+
                 playbackContent
+                    .frame(maxWidth: 520)
             }
-            .frame(maxWidth: 960)
+            .frame(maxWidth: 1080)
         } else {
             VStack(spacing: EdgeInsets.edgePadding) {
                 albumArtwork
-                    .padding(.horizontal, EdgeInsets.edgePadding)
+                    .frame(
+                        maxWidth: min(520, size.width - EdgeInsets.edgePadding * 2),
+                        maxHeight: min(520, size.height * 0.48)
+                    )
 
                 playbackContent
+                    .frame(maxWidth: 560)
             }
         }
     }
@@ -454,24 +615,157 @@ private struct MusicPlayerPopupView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        ZStack {
+            LinearGradient(
+                colors: [resolvedColor.opacity(0.78), .black],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
             VStack(spacing: 0) {
                 header
 
-                ScrollView {
-                    playerContent
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, EdgeInsets.edgePadding)
-                        .padding(.top, EdgeInsets.edgePadding / 2)
-                        .padding(.bottom, EdgeInsets.edgePadding * 2)
+                GeometryReader { geometry in
+                    ScrollView {
+                        playerContent(in: geometry.size)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, EdgeInsets.edgePadding)
+                            .padding(.top, EdgeInsets.edgePadding / 2)
+                            .padding(.bottom, EdgeInsets.edgePadding * 2)
+                            .frame(minHeight: geometry.size.height, alignment: .center)
+                    }
+                    .trackingFrame(for: .scrollView)
                 }
-                .trackingFrame(for: .scrollView)
             }
-            .background(resolvedColor)
+        }
+        .preferredColorScheme(.dark)
+        .onChange(of: manager.item.id) {
+            resolvedColor = .clear
         }
         .sheet(isPresented: $isQueuePresented) {
             queueSheet
         }
+        .sheet(isPresented: $isMediaInfoPresented) {
+            if let playbackItem = manager.playbackItem {
+                MusicMediaInformationSheet(
+                    item: manager.item,
+                    source: playbackItem.mediaSource,
+                    isPresented: $isMediaInfoPresented
+                )
+            }
+        }
+    }
+}
+
+private struct MusicPlayerVolumeControl: View {
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "speaker.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            SystemVolumeSlider()
+                .frame(height: 32)
+
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(L10n.volume)
+    }
+}
+
+private struct SystemVolumeSlider: UIViewRepresentable {
+
+    func makeUIView(context: Context) -> MPVolumeView {
+        let view = MPVolumeView(frame: .zero)
+        view.showsRouteButton = false
+        view.showsVolumeSlider = true
+        return view
+    }
+
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
+}
+
+private struct MusicPlayerRoutePicker: UIViewRepresentable {
+
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView(frame: .zero)
+        view.activeTintColor = .white
+        view.tintColor = .white
+        view.prioritizesVideoDevices = false
+        return view
+    }
+
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
+}
+
+private struct MusicMediaInformationSheet: View {
+
+    let item: BaseItemDto
+    let source: MediaSourceInfo
+
+    @Binding
+    var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(L10n.details) {
+                    LabeledContent(L10n.title, value: item.displayTitle)
+
+                    if let artists = item.artists?.joined(separator: ", ") ?? item.albumArtist {
+                        LabeledContent(L10n.artist, value: artists)
+                    }
+
+                    if let album = item.album {
+                        LabeledContent(L10n.album, value: album)
+                    }
+
+                    ForEach(source.transferProperties, id: \.label) { property in
+                        LabeledContent(property.label, value: property.value)
+                    }
+                }
+
+                if let audioStreams = source.audioStreams, audioStreams.isNotEmpty {
+                    Section(L10n.audio) {
+                        ForEach(audioStreams, id: \.self) { stream in
+                            NavigationLink {
+                                MediaStreamInfoView(mediaStream: stream)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(stream.displayTitle ?? L10n.audio)
+
+                                    Text(stream.transferProperties.map(\.value).joined(separator: " · "))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(L10n.media)
+            .toolbarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if #available(iOS 26.0, *) {
+                        Button(L10n.close, role: .close) {
+                            isPresented = false
+                        }
+                    } else {
+                        Button(L10n.close) {
+                            isPresented = false
+                        }
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
@@ -962,5 +1256,36 @@ private struct MusicPlayerPopupNextButton: View {
         }
         .disabled(queue.nextItem == nil || manager.state == .loadingItem)
         .accessibilityLabel(L10n.nextItem)
+    }
+}
+
+private struct MusicPlayerPopupPreviousButton: View {
+
+    @ObservedObject
+    var manager: MediaPlayerManager
+    @ObservedObject
+    var queue: AnyMediaPlayerQueue
+    @ObservedObject
+    private var seconds: PublishedBox<Duration>
+
+    init(manager: MediaPlayerManager, queue: AnyMediaPlayerQueue) {
+        self.manager = manager
+        self.queue = queue
+        self.seconds = manager.secondsBox
+    }
+
+    var body: some View {
+        Button {
+            if seconds.value.seconds > 3 || queue.previousItem == nil {
+                manager.seconds = .zero
+                manager.proxy?.setSeconds(.zero)
+            } else if let previousItem = queue.previousItem {
+                manager.playNewItem(provider: previousItem)
+            }
+        } label: {
+            Image(systemName: "backward.end.fill")
+        }
+        .disabled(manager.state == .loadingItem)
+        .accessibilityLabel(L10n.previousItem)
     }
 }

@@ -87,7 +87,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
 
         switch item.type {
         #if os(iOS)
-        case .musicAlbum:
+        case .musicAlbum, .musicArtist, .musicGenre, .playlist:
             MusicTrackContentGroup(parent: item)
         #endif
         case .season, .series:
@@ -100,6 +100,18 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         }
 
         if let genres = item.itemGenres, genres.isNotEmpty {
+            let genreItemTypes: [BaseItemKind] = if [
+                .audio,
+                .musicAlbum,
+                .musicArtist,
+                .musicGenre,
+                .playlist,
+            ].contains(item.type) {
+                [.audio, .musicAlbum, .musicArtist]
+            } else {
+                Self.browsableItemTypes
+            }
+
             PillGroup(
                 displayTitle: L10n.genres,
                 id: "genres",
@@ -108,7 +120,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
                 router.route(
                     to: .contentGroup(
                         provider: ItemTypeContentGroupProvider(
-                            itemTypes: Self.browsableItemTypes,
+                            itemTypes: genreItemTypes,
                             parent: BaseItemDto(name: element.displayTitle),
                             environment: .init(filters: .init(genres: [element]))
                         )
@@ -300,7 +312,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
     ) async throws -> MediaPlayerItemProvider? {
         let playbackItem: BaseItemDto? = switch item.type {
         #if os(iOS)
-        case .musicAlbum, .musicArtist:
+        case .musicAlbum, .musicArtist, .musicGenre, .playlist:
             try await firstAudioItem(for: item)
         #endif
         case .series:

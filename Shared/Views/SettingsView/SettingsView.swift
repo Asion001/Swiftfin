@@ -87,6 +87,10 @@ struct SettingsView: View {
                         router.route(to: .adminDashboard)
                     }
                 }
+
+                ChevronButton(L10n.downloads) {
+                    router.route(to: .downloadList)
+                }
                 #endif
             }
         }

@@ -31,6 +31,11 @@ extension EnvironmentValues {
     @Entry
     var isSelected: Bool = false
 
+    /// Extra scroll clearance while the persistent music mini player is visible.
+    /// Some custom collection layouts ignore SwiftUI's bottom safe-area inset.
+    @Entry
+    var musicPlayerBottomInset: CGFloat = 0
+
     @Entry
     var playbackSpeed: Binding<Double> = .constant(1)
 

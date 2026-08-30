@@ -19,6 +19,9 @@ struct PagingLibraryView<Library: PagingLibrary>: View where Library.Element: Li
     @Default(.Customization.Library.style)
     private var defaultLibraryStyle
 
+    @Environment(\.musicPlayerBottomInset)
+    private var musicPlayerBottomInset
+
     @Namespace
     private var namespace
 
@@ -69,24 +72,27 @@ struct PagingLibraryView<Library: PagingLibrary>: View where Library.Element: Li
         self._viewModel = StateObject(wrappedValue: PagingLibraryViewModel(library: library))
     }
 
+    private func gridInsets(for frame: FrameAndSafeAreaInsets) -> EdgeInsets {
+        var insets: EdgeInsets = if #available(iOS 26, *), isSafeAreaBarApplied {
+            frame.safeAreaInsets + 10
+        } else {
+            .zero + 10
+        }
+        insets.bottom += musicPlayerBottomInset
+        return insets
+    }
+
     @ViewBuilder
     private var elementsView: some View {
         AlternateLayoutView {
             Color.clear
-        } content: { frame in
-
-            let insets: EdgeInsets = if #available(iOS 26, *), isSafeAreaBarApplied {
-                frame.safeAreaInsets + 10
-            } else {
-                .zero + 10
-            }
-
+        } content: { (frame: FrameAndSafeAreaInsets) in
             CollectionVGrid(
                 uniqueElements: viewModel.displayedElements,
                 layout: Element.layout(
                     for: libraryStyle,
                     options: libraryStyleOptions,
-                    insets: insets
+                    insets: gridInsets(for: frame)
                 )
             ) { element in
                 element.makeBody(libraryStyle: libraryStyle)

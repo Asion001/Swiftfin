@@ -69,6 +69,7 @@ extension ItemView {
             if (UIDevice.isTV && provider.item.canEdit) ||
                 provider.item.canBePlayed ||
                 provider.item.canBeFavorited ||
+                (!UIDevice.isTV && provider.item.canBeDownloaded) ||
                 hasTrailers
             {
                 contentView
@@ -121,6 +122,16 @@ extension ItemView {
                     #endif
                     .isSelected(isFavorited)
                 }
+
+                #if os(iOS)
+                if provider.item.canBeDownloaded {
+                    MediaDownloadButton(
+                        item: provider.item,
+                        style: .itemAction
+                    )
+                    .id(provider.item.id)
+                }
+                #endif
 
                 // MARK: Trailer
 

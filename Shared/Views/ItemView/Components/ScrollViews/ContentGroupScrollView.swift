@@ -15,6 +15,9 @@ extension ItemView {
 
     struct ContentGroupScrollView: View {
 
+        @Environment(\.musicPlayerBottomInset)
+        private var musicPlayerBottomInset
+
         @EnvironmentObject
         private var focusCoordinator: FocusCoordinator
 
@@ -80,6 +83,7 @@ extension ItemView {
                 ScrollView {
                     ContentGroupVStack(groups: groups)
                         .edgePadding(.bottom)
+                        .padding(.bottom, musicPlayerBottomInset)
                 }
                 .trackingFrame(for: .scrollView)
                 .ignoresSafeArea(edges: isEnhanced ? .all : .horizontal)

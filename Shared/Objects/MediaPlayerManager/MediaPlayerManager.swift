@@ -202,6 +202,12 @@ final class MediaPlayerManager: ViewModel {
 
     private var initialMediaPlayerItemProvider: MediaPlayerItemProvider?
 
+    #if os(iOS)
+    private var nextItemPreloadTask: Task<Void, Never>?
+    private var pendingNextItemProvider: MediaPlayerItemProvider?
+    private var preloadedNextItem: MediaPlayerItem?
+    #endif
+
     // MARK: init
 
 //    static let empty: MediaPlayerManager = .init()
@@ -223,6 +229,7 @@ final class MediaPlayerManager: ViewModel {
         super.init()
 
         self.queue?.manager = self
+        configureAudioPreloading()
     }
 
     init(
@@ -236,6 +243,7 @@ final class MediaPlayerManager: ViewModel {
 
         self.queue?.manager = self
         self.playbackItem = playbackItem
+        configureAudioPreloading()
     }
 
     @Function(\Action.Cases.ended)
@@ -298,11 +306,19 @@ final class MediaPlayerManager: ViewModel {
         }
 
         proxy?.stop()
+        #if os(iOS)
+        resetAudioPreload()
+        #endif
         unregisterIfCurrent()
     }
 
     @Function(\Action.Cases.playNewItem)
     private func _playNewItem(_ provider: MediaPlayerItemProvider) async throws {
+        #if os(iOS)
+        let preparedItem = preloadedNextItem?.baseItem.id == provider.item.id ? preloadedNextItem : nil
+        resetAudioPreload()
+        #endif
+
         stopsAtEndOfCurrentItem = false
         item = provider.item
         seconds = provider.item.startSeconds ?? .zero
@@ -313,7 +329,15 @@ final class MediaPlayerManager: ViewModel {
             playbackRequestStatus = .playing
         }
         #endif
+        #if os(iOS)
+        if let preparedItem {
+            playbackItem = preparedItem
+        } else {
+            playbackItem = try await provider()
+        }
+        #else
         playbackItem = try await provider()
+        #endif
     }
 
     @Function(\Action.Cases.setBitrate)
@@ -405,6 +429,9 @@ final class MediaPlayerManager: ViewModel {
         await self.cancel()
 
         proxy?.stop()
+        #if os(iOS)
+        resetAudioPreload()
+        #endif
         unregisterIfCurrent()
     }
 
@@ -416,6 +443,80 @@ final class MediaPlayerManager: ViewModel {
         guard Container.shared.mediaPlayerManager() === self else { return }
         Container.shared.mediaPlayerManager.reset()
     }
+
+    #if os(iOS)
+    /// Resolves the next audio item shortly before the current track ends. The
+    /// prepared stream can then be handed to either AVPlayer or MPV without a
+    /// second playback-info round trip between songs.
+    private func configureAudioPreloading() {
+        guard item.type == .audio, let queue else { return }
+
+        queue.nextItemPublisher
+            .sink { [weak self] provider in
+                guard let self else { return }
+
+                if pendingNextItemProvider?.item.id != provider?.item.id {
+                    nextItemPreloadTask?.cancel()
+                    nextItemPreloadTask = nil
+                    preloadedNextItem = nil
+                }
+
+                pendingNextItemProvider = provider
+                preloadNextAudioItemIfNeeded()
+            }
+            .store(in: &cancellables)
+
+        secondsBox.$value
+            .sink { [weak self] _ in
+                self?.preloadNextAudioItemIfNeeded()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func resetAudioPreload() {
+        nextItemPreloadTask?.cancel()
+        nextItemPreloadTask = nil
+        pendingNextItemProvider = nil
+        preloadedNextItem = nil
+    }
+
+    private func preloadNextAudioItemIfNeeded() {
+        guard item.type == .audio,
+              nextItemPreloadTask == nil,
+              preloadedNextItem == nil,
+              let provider = pendingNextItemProvider,
+              let runtime = item.runtime,
+              runtime > .zero,
+              max(0, (runtime - seconds).seconds) <= 30
+        else {
+            return
+        }
+
+        let currentItemID = item.id
+        let nextItemID = provider.item.id
+
+        nextItemPreloadTask = Task { @MainActor [weak self] in
+            defer { self?.nextItemPreloadTask = nil }
+
+            do {
+                let preparedItem = try await provider()
+                guard !Task.isCancelled,
+                      self?.item.id == currentItemID,
+                      self?.pendingNextItemProvider?.item.id == nextItemID
+                else {
+                    return
+                }
+
+                self?.preloadedNextItem = preparedItem
+            } catch {
+                self?.logger.warning(
+                    "Unable to preload next audio item",
+                    metadata: ["error": .stringConvertible(error.localizedDescription)]
+                )
+            }
+        }
+    }
+    #endif
 
     @Function(\Action.Cases.togglePlayPause)
     private func _togglePlayPause() {

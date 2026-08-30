@@ -14,11 +14,30 @@ import SwiftUI
 
 struct ContentGroupView<Provider: ContentGroupProvider>: View {
 
+    @Environment(\.musicPlayerBottomInset)
+    private var musicPlayerBottomInset
+
     @Router
     private var router
 
     @State
     private var contentGroupOptions: ContentGroupParentOption = .init()
+
+    #if os(iOS)
+    private var musicPlaybackParent: BaseItemDto? {
+        guard let provider = viewModel.provider as? ItemTypeContentGroupProvider,
+              provider.itemTypes.contains(.audio),
+              let genre = provider.environment.filters.genres.first
+        else {
+            return nil
+        }
+
+        return BaseItemDto(
+            name: genre.displayTitle,
+            type: .musicGenre
+        )
+    }
+    #endif
 
     @StateObject
     private var focusCoordinator: FocusCoordinator = .init()
@@ -43,6 +62,7 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
 
                     ContentGroupVStack(groups: viewModel.groups)
                         .edgePadding(contentGroupOptions.contains(.ignoreSafeAreaTop) ? .bottom : .vertical)
+                        .padding(.bottom, musicPlayerBottomInset)
                         .onPreferenceChange(ContentGroupCustomizationKey.self) { value in
                             contentGroupOptions = value
                         }
@@ -113,7 +133,67 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
                         ProgressView()
                     }
                 }
+
+                if let musicPlaybackParent {
+                    MusicCollectionPlayButton(parent: musicPlaybackParent)
+                }
             }
             .environmentObject(focusCoordinator)
     }
 }
+
+#if os(iOS)
+private struct MusicCollectionPlayButton: View {
+
+    let parent: BaseItemDto
+
+    @State
+    private var isLoading = false
+
+    var body: some View {
+        Button {
+            play()
+        } label: {
+            if isLoading {
+                ProgressView()
+            } else {
+                Image(systemName: "play.fill")
+            }
+        }
+        .disabled(isLoading)
+        .accessibilityLabel(L10n.play)
+    }
+
+    private func play() {
+        guard !isLoading else { return }
+        isLoading = true
+
+        Task { @MainActor in
+            defer { isLoading = false }
+
+            guard let userSession = Container.shared.currentUserSession() else { return }
+
+            let library = MusicTrackLibrary(parent: parent, limit: 1)
+            let pageState = LibraryPageState(
+                pageOffset: 0,
+                pageSize: 1,
+                userSession: userSession
+            )
+
+            guard let item = try? await library.retrievePage(
+                environment: .default,
+                pageState: pageState
+            ).first,
+                let provider = item.getPlaybackItemProvider(userSession: userSession)
+            else {
+                return
+            }
+
+            NavigationRoute.musicPlayer(
+                provider: provider,
+                queue: MusicMediaPlayerQueue(item: item, parent: parent)
+            )
+        }
+    }
+}
+#endif
