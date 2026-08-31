@@ -1374,7 +1374,7 @@
 			repositoryURL = "https://github.com/Asion001/MPVKit.git";
 			requirement = {
 				kind = exactVersion;
-				version = "1.0.0-swiftfin.3";
+				version = "1.0.0-swiftfin.4";
 			};
 		};
 		5335256F265EA0A0006CCA86 /* XCRemoteSwiftPackageReference "SwiftUI-Introspect" */ = {
