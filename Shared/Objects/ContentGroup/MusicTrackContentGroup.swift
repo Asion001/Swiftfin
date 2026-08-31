@@ -50,9 +50,11 @@ struct MusicTrackContentGroup: ContentGroup {
                             parent: parent,
                             fallbackIndex: offset + 1
                         )
+                        .if(offset < viewModel.elements.count - 1) { row in
+                            row.withViewContext(.isListRowSeparatorVisible)
+                        }
                     }
                 }
-                .withViewContext(.isListRowSeparatorVisible)
                 .background(Color.secondarySystemBackground)
                 .clipShape(.rect(cornerRadius: 12, style: .continuous))
                 .edgePadding(.horizontal)

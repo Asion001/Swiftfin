@@ -121,8 +121,11 @@ class DownloadTask: NSObject, ObservableObject {
         let request = Paths.getDownload(itemID: itemID)
         let response = try await userSession.client.download(for: request, delegate: self)
 
-        let subtype = response.response.mimeSubtype
-        let mediaExtension = subtype == nil ? "" : ".\(subtype!)"
+        let suggestedExtension = response.response.suggestedFilename
+            .map(URL.init(fileURLWithPath:))?
+            .pathExtension
+        let mediaExtension = (suggestedExtension?.isEmpty == false ? suggestedExtension : response.response.mimeSubtype)
+            .map { ".\($0)" } ?? ""
 
         do {
             try FileManager.default.createDirectory(at: downloadFolder, withIntermediateDirectories: true)
@@ -133,6 +136,7 @@ class DownloadTask: NSObject, ObservableObject {
             )
         } catch {
             logger.error("Error downloading media for: \(item.displayTitle) with error: \(error.localizedDescription)")
+            throw error
         }
     }
 
@@ -172,7 +176,7 @@ class DownloadTask: NSObject, ObservableObject {
         let imageURL: URL
 
         switch type {
-        case .movie, .series:
+        case .audio, .audioBook, .movie, .musicAlbum, .musicArtist, .musicVideo, .recording, .series, .trailer, .video:
             guard let url = item.imageSource(.primary, environment: ImageSourceOptions(maxWidth: 300)).url else { return }
             imageURL = url
         default:
@@ -307,3 +311,31 @@ extension DownloadTask: Identifiable {
         item.id!
     }
 }
+
+#if os(iOS)
+extension DownloadTask {
+
+    @MainActor
+    var offlineMediaPlayerItemProvider: MediaPlayerItemProvider? {
+        guard let mediaURL = getMediaURL() else { return nil }
+
+        let artworkURL = getImageURL(name: "Primary") ?? getImageURL(name: "Backdrop")
+        let source = item.mediaSources?.first
+
+        return MediaPlayerItemProvider(
+            item: item,
+            mediaSource: source
+        ) { item, modifyItem in
+            var resolvedItem = item
+            modifyItem?(&resolvedItem)
+
+            return await MediaPlayerItem.buildOffline(
+                item: resolvedItem,
+                mediaSource: source,
+                mediaURL: mediaURL,
+                artworkURL: artworkURL
+            )
+        }
+    }
+}
+#endif

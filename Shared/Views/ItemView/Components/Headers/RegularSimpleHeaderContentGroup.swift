@@ -39,6 +39,42 @@ extension ItemView {
                 }
             }
 
+            private var usesMusicControlRow: Bool {
+                [
+                    .audio,
+                    .musicAlbum,
+                    .musicArtist,
+                    .musicGenre,
+                    .playlist,
+                ].contains(provider.item.type)
+            }
+
+            @ViewBuilder
+            private var controls: some View {
+                if usesMusicControlRow {
+                    HStack(spacing: 12) {
+                        ItemView.ActionButtonHStack(provider: provider)
+
+                        Spacer(minLength: 16)
+
+                        if provider.item.presentPlayButton {
+                            PlayButton(provider: provider)
+                                .frame(maxWidth: 220)
+                        }
+                    }
+                    .frame(maxWidth: 520)
+                } else {
+                    VStack(alignment: .leading, spacing: UIDevice.isTV ? 25 : 5) {
+                        if provider.item.presentPlayButton {
+                            PlayButton(provider: provider)
+                        }
+
+                        ItemView.ActionButtonHStack(provider: provider)
+                    }
+                    .frame(maxWidth: UIDevice.isTV ? 450 : 300, alignment: .leading)
+                }
+            }
+
             @ViewBuilder
             private var title: some View {
                 VStack(alignment: .leading, spacing: 5) {
@@ -85,14 +121,7 @@ extension ItemView {
 
                         ItemView.Description(item: provider.item)
 
-                        VStack(alignment: .leading, spacing: UIDevice.isTV ? 25 : 5) {
-                            if provider.item.presentPlayButton {
-                                PlayButton(provider: provider)
-                            }
-
-                            ItemView.ActionButtonHStack(provider: provider)
-                        }
-                        .frame(maxWidth: UIDevice.isTV ? 450 : 300, alignment: .leading)
+                        controls
 
                         ItemView.AttributesHStack(
                             attributes: attributes,

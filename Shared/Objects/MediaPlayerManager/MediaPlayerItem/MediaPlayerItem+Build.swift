@@ -11,11 +11,56 @@ import FactoryKit
 import Foundation
 import JellyfinAPI
 import Logging
+#if os(iOS)
+import UIKit
+#endif
 
 // TODO: build report of determined values for playback information
 //       - transcode, video stream, path
 
 extension MediaPlayerItem {
+
+    #if os(iOS)
+    /// Builds a normal player item around a downloaded local file. Keeping the
+    /// same manager/proxy path means native playback and MPV both work offline.
+    static func buildOffline(
+        item: BaseItemDto,
+        mediaSource: MediaSourceInfo?,
+        mediaURL: URL,
+        artworkURL: URL?
+    ) -> MediaPlayerItem {
+        var resolvedSource = mediaSource ?? .init()
+        resolvedSource.id = resolvedSource.id ?? item.id
+        resolvedSource.name = resolvedSource.name ?? item.displayTitle
+
+        let maximumBitrate = Int(Int32.max)
+        let deviceProfile = if item.mediaType == .audio || item.type == .audio || item.type == .audioBook {
+            DeviceProfile.audioPlayer(
+                for: Defaults[.MusicPlayer.playerType],
+                maxBitrate: maximumBitrate
+            )
+        } else {
+            DeviceProfile.build(
+                for: Defaults[.VideoPlayer.videoPlayerType],
+                compatibilityMode: Defaults[.VideoPlayer.Playback.compatibilityMode],
+                maxBitrate: maximumBitrate
+            )
+        }
+
+        return MediaPlayerItem(
+            baseItem: item,
+            mediaSource: resolvedSource,
+            playSessionID: "offline-\(item.id ?? UUID().uuidString)",
+            url: mediaURL,
+            requestedBitrate: .max,
+            deviceProfile: deviceProfile,
+            thumbnailProvider: {
+                guard let artworkURL else { return nil }
+                return UIImage(contentsOfFile: artworkURL.path)
+            }
+        )
+    }
+    #endif
 
     /// The main `MediaPlayerItem` builder for normal online usage.
     static func build(

@@ -24,23 +24,38 @@ struct MusicTrackLibrary: BaseItemKindLibrary {
         environment: Empty,
         pageState: LibraryPageState
     ) async throws -> [BaseItemDto] {
-        guard let parentID = parent.id else {
-            throw ErrorMessage(L10n.unknownError)
-        }
+        let parameters = try makeParameters(userID: pageState.userSession.user.id)
+        let request = Paths.getItems(parameters: parameters)
+        let response = try await pageState.userSession.client.send(request)
 
+        return response.value.items ?? []
+    }
+
+    /// Keeps collection-specific query routing independently testable. Artist
+    /// and genre pages are not children of their tracks in Jellyfin's item
+    /// hierarchy, so treating every collection as a parent ID yields no songs.
+    func makeParameters(userID: String) throws -> Paths.GetItemsParameters {
         var parameters = Paths.GetItemsParameters()
         parameters.enableUserData = true
         parameters.isRecursive = true
         parameters.includeItemTypes = [.audio]
         parameters.limit = limit
-        parameters.parentID = parentID
         parameters.sortBy = [.album, .parentIndexNumber, .indexNumber, .sortName]
         parameters.sortOrder = [.ascending]
-        parameters.userID = pageState.userSession.user.id
+        parameters.userID = userID
 
-        let request = Paths.getItems(parameters: parameters)
-        let response = try await pageState.userSession.client.send(request)
+        switch parent.type {
+        case .musicArtist:
+            guard let parentID = parent.id else { throw ErrorMessage(L10n.unknownError) }
+            parameters.artistIDs = [parentID]
+        case .musicGenre:
+            guard let genre = parent.name, genre.isNotEmpty else { throw ErrorMessage(L10n.unknownError) }
+            parameters.genres = [genre]
+        default:
+            guard let parentID = parent.id else { throw ErrorMessage(L10n.unknownError) }
+            parameters.parentID = parentID
+        }
 
-        return response.value.items ?? []
+        return parameters
     }
 }

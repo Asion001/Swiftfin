@@ -479,7 +479,7 @@ extension BaseItemDto {
 //            .appendingPathComponent(userSession.user.id)
 
         switch type {
-        case .movie, .episode:
+        case .audio, .audioBook, .episode, .movie, .musicVideo, .recording, .trailer, .video:
             return root
                 .appendingPathComponent(id)
 //        case .episode:
@@ -508,7 +508,7 @@ extension BaseItemDto {
 
         switch type {
         case .audio, .audioBook, .book, .channel, .channelFolderItem, .episode,
-             .movie, .liveTvChannel, .liveTvProgram, .musicAlbum, .musicArtist, .musicVideo, .playlist,
+             .movie, .liveTvChannel, .liveTvProgram, .musicAlbum, .musicArtist, .musicGenre, .musicVideo, .playlist,
              .program, .recording, .season, .series, .trailer, .tvChannel, .tvProgram, .video:
             return true
         default:
@@ -530,7 +530,7 @@ extension BaseItemDto {
     var canBePlayed: Bool {
         switch type {
         case .audio, .audioBook, .book, .boxSet, .channelFolderItem, .collectionFolder, .episode, .manualPlaylistsFolder,
-             .movie, .musicAlbum, .musicArtist, .musicVideo, .playlist, .playlistsFolder, .recording, .season,
+             .movie, .musicAlbum, .musicArtist, .musicGenre, .musicVideo, .playlist, .playlistsFolder, .recording, .season,
              .series, .trailer, .video:
             true
         default:
