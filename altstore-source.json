@@ -22,6 +22,17 @@
       "screenshots": [],
       "versions": [
         {
+          "version": "2026.8.31",
+          "buildVersion": "1788205978",
+          "marketingVersion": "Enhanced 2026.8.31 (1788205978)",
+          "date": "2026-08-31T19:52:58Z",
+          "localizedDescription": "Automated build from a452c44. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.31-1788205978/Swiftfin-Enhanced.ipa",
+          "size": 196607905,
+          "sha256": "82c750c273a29d4eabaa57418915bc371e660b83271318784796e91be6650c73",
+          "minOSVersion": "18.6"
+        },
+        {
           "version": "2026.8.30",
           "buildVersion": "1788079626",
           "marketingVersion": "Enhanced 2026.8.30 (1788079626)",
@@ -228,17 +239,6 @@
           "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.24-1787552163/Swiftfin-Enhanced.ipa",
           "size": 182793253,
           "sha256": "2899ef4e0244d3c735c6219c76260ab1c4740d4e49ce48ba694ee7383ceaf1db",
-          "minOSVersion": "18.6"
-        },
-        {
-          "version": "2026.8.23",
-          "buildVersion": "1787520069",
-          "marketingVersion": "Enhanced 2026.8.23 (1787520069)",
-          "date": "2026-08-23T21:21:09Z",
-          "localizedDescription": "Automated build from 3721482 with thermally adaptive Apple MetalFX enhancement, realtime edge-quality profiles, duplicate-render and offscreen-fill suppression, source-FPS frame pacing, bounded processing buffering, PiP resource suspension, reliable subtitles and a stable scrollable subtitle settings sheet, customizable text-subtitle positioning, playback sleep timer, and current upstream Swiftfin changes.",
-          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.23-1787520069/Swiftfin-Enhanced.ipa",
-          "size": 182787558,
-          "sha256": "69629c4fbf48d638f574057ddcd1c001ea77ec2ccd8ad80c13e40fa64955241d",
           "minOSVersion": "18.6"
         }
       ],
