@@ -134,9 +134,11 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
                     }
                 }
 
+                #if os(iOS)
                 if let musicPlaybackParent {
                     MusicCollectionPlayButton(parent: musicPlaybackParent)
                 }
+                #endif
             }
             .environmentObject(focusCoordinator)
     }

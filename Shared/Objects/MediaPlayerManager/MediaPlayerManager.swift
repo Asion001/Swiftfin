@@ -229,7 +229,9 @@ final class MediaPlayerManager: ViewModel {
         super.init()
 
         self.queue?.manager = self
+        #if os(iOS)
         configureAudioPreloading()
+        #endif
     }
 
     init(
@@ -243,7 +245,9 @@ final class MediaPlayerManager: ViewModel {
 
         self.queue?.manager = self
         self.playbackItem = playbackItem
+        #if os(iOS)
         configureAudioPreloading()
+        #endif
     }
 
     @Function(\Action.Cases.ended)
