@@ -82,6 +82,33 @@ enum MPVUpscaler {
     /// is how `MPVUpscalerController` detects the patch.
     static let metalFXOptionName = "metalfx"
 
+    /// Declared by the same patch, so a build exposing `metalfx` exposes this.
+    static let metalFXSharpnessOptionName = "metalfx-sharpness"
+
+    /// The unsharp mask that runs after the main scaler.
+    static let sharpenShaderFileName = "Sharpen.glsl"
+
+    /// MPV parses this with its own float parser, which wants a plain decimal
+    /// rather than anything a locale might introduce.
+    static func amountString(_ value: Float) -> String {
+        String(format: "%.2f", locale: Locale(identifier: "en_US_POSIX"), value)
+    }
+
+    /// How hard to sharpen at each tier.
+    ///
+    /// These are the `CISharpenLuminance` amounts the AVPlayer-based upscaler
+    /// this replaced ended every frame with. Reconstruction alone is close to
+    /// invisible at the 1.2x-2.8x factors a phone asks for, so the sharpening
+    /// was what the tiers actually differed by and what made the feature
+    /// visible at all.
+    static func sharpness(for level: VideoEnhancementLevel) -> Float {
+        switch level {
+        case .fast: 0.25
+        case .balanced: 0.55
+        case .quality: 0.85
+        }
+    }
+
     /// One complete renderer update.
     ///
     /// Keeping the shader list, scaler options, and MetalFX state together lets
@@ -94,6 +121,10 @@ enum MPVUpscaler {
 
         /// `nil` means the running libmpv does not expose the MetalFX option.
         var isMetalFXEnabled: Bool?
+
+        /// `nil` on a build without the patch, where the option does not exist
+        /// and writing it would be reported as an unknown option.
+        var metalFXSharpness: Float?
     }
 
     /// The MPV options that realize a given upscaler selection.
@@ -108,8 +139,14 @@ enum MPVUpscaler {
         /// Whether the patched MetalFX pass should run.
         var isMetalFXEnabled = false
 
+        /// MetalFX upscales outside libplacebo, so a shader hooked after the
+        /// scaler runs before the upscale rather than after it and would
+        /// amplify what MetalFX then magnifies. The patched renderer sharpens
+        /// its own output instead, which is what this asks it for.
+        var metalFXSharpness: Float = 0
+
         static let disabled = Configuration(
-            options: Self.scalerOptions(isEnhanced: false, isActive: false)
+            options: Self.scalerOptions(isEnhanced: false, isActive: false, sharpness: 0)
         )
     }
 
@@ -120,22 +157,26 @@ enum MPVUpscaler {
     ) -> Configuration {
         guard let level else { return .disabled }
 
+        let sharpness = sharpness(for: level)
+
         switch provider {
         case .metalFX:
             guard isMetalFXSupported else { return .disabled }
 
             return Configuration(
-                options: Configuration.scalerOptions(isEnhanced: false, isActive: true),
-                isMetalFXEnabled: true
+                options: Configuration.scalerOptions(isEnhanced: false, isActive: true, sharpness: 0),
+                isMetalFXEnabled: true,
+                metalFXSharpness: sharpness
             )
         case .shader:
             let preset = MPVShaderPreset(level: level)
 
             return Configuration(
-                shaders: preset.shaderFileNames,
+                shaders: preset.shaderFileNames + [sharpenShaderFileName],
                 options: Configuration.scalerOptions(
                     isEnhanced: preset == .builtIn,
-                    isActive: true
+                    isActive: true,
+                    sharpness: sharpness
                 )
             )
         }
@@ -150,7 +191,7 @@ extension MPVUpscaler.Configuration {
     /// costs far less than a CNN pass while still beating the defaults. Every
     /// key is always present so switching tiers restores the defaults rather
     /// than leaving the previous tier's values applied.
-    static func scalerOptions(isEnhanced: Bool, isActive: Bool) -> [String: String] {
+    static func scalerOptions(isEnhanced: Bool, isActive: Bool, sharpness: Float) -> [String: String] {
         [
             // The sharp alias deliberately increases ringing. The neutral EWA
             // filter plus anti-ringing keeps edges defined without turning
@@ -165,6 +206,11 @@ extension MPVUpscaler.Configuration {
             // visible as dots and is magnified by both upscaling providers.
             "dither-depth": isActive ? "no" : "auto",
             "sigmoid-upscaling": isEnhanced ? "yes" : "no",
+
+            // Always present, and zero when nothing should sharpen, so that
+            // turning the upscaler off or moving to MetalFX clears the amount
+            // instead of leaving the previous tier's applied.
+            "glsl-shader-opts": "Sharpen/amount=\(MPVUpscaler.amountString(sharpness))",
         ]
     }
 }
