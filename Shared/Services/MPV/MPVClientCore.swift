@@ -73,22 +73,20 @@ protocol MPVOptionConfigurable: AnyObject, Sendable {
 /// a renderer that ran no passes — the exact thing the list exists to rule out.
 enum MPVRenderPasses {
 
-    /// The printed form is `fresh:`, then `- <name>: last …us avg …us peak …us`
-    /// per pass, then the same again under `redraw:`. Only the fresh ones
-    /// describe the frame just drawn.
+    /// `vo-passes` has no string form of its own. It answers `GET` with a node
+    /// and `PRINT` with the human-readable listing, and `mpv_get_property_string`
+    /// asks for neither: it takes the node and prints it, which for a node means
+    /// JSON. So what arrives is `{"fresh": [{"desc": …, "last": …}, …],
+    /// "redraw": […]}` rather than the listing the terminal shows.
+    ///
+    /// Only the fresh entries describe the frame just drawn.
     static func names(from summary: String) -> [String] {
-        summary
-            .components(separatedBy: "redraw:")
-            .first?
-            .split(separator: "\n")
-            .compactMap { line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard trimmed.hasPrefix("- ") else { return nil }
+        guard let data = summary.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let fresh = root["fresh"] as? [[String: Any]]
+        else { return [] }
 
-                let body = trimmed.dropFirst(2)
-                let name = body.prefix { $0 != ":" }
-                return name.isEmpty ? nil : String(name)
-            } ?? []
+        return fresh.compactMap { $0["desc"] as? String }
     }
 }
 
@@ -491,11 +489,12 @@ private extension MPVClientCore {
     /// enabled beforehand. Reading blocks on MPV's core thread, so it runs once
     /// per applied pipeline rather than on any regular schedule.
     ///
-    /// Read whole. `vo-passes` answers only `GET` and `PRINT` and returns
-    /// `M_PROPERTY_NOT_IMPLEMENTED` for anything else, so a sub-path such as
-    /// `vo-passes/fresh/count` cannot be read at all — which reports as no
-    /// passes rather than as a failure, and is indistinguishable from a
-    /// renderer that ran none.
+    /// Read whole, and as JSON. `vo-passes` answers only `GET` and `PRINT`,
+    /// returning `M_PROPERTY_NOT_IMPLEMENTED` for anything else, so a sub-path
+    /// such as `vo-passes/fresh/count` cannot be read at all, and a string read
+    /// falls back to printing the node — which yields JSON, not the listing.
+    /// Both mistakes report as no passes rather than as a failure, which is
+    /// indistinguishable from a renderer that ran none.
     func reportRenderPasses() {
         guard let handle else { return }
 

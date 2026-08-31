@@ -448,16 +448,18 @@ final class MPVTests: XCTestCase {
 
     // MARK: - Render passes
 
-    func testRenderPassNamesAreReadFromWhatMPVPrints() {
-        let summary = [
-            "fresh:",
-            "- upload plane 0: last 91us avg 88us peak 210us",
-            "- ArtCNN_C4F16: last 1204us avg 1180us peak 2400us",
-            "- output: last 300us avg 290us peak 700us",
-            "",
-            "redraw:",
-            "- output: last 12us avg 11us peak 40us",
-        ].joined(separator: "\n")
+    func testRenderPassNamesAreReadFromTheJSONMPVActuallyReturns() {
+        /// Not the listing `vo-passes` prints in a terminal: a string read of a
+        /// node property falls back to printing the node, which is JSON.
+        let summary = """
+        {"fresh":[\
+        {"desc":"upload plane 0","last":91,"avg":88,"peak":210,"count":0,"samples":[]},\
+        {"desc":"ArtCNN_C4F16","last":1204,"avg":1180,"peak":2400,"count":0,"samples":[]},\
+        {"desc":"output","last":300,"avg":290,"peak":700,"count":0,"samples":[]}\
+        ],"redraw":[\
+        {"desc":"output","last":12,"avg":11,"peak":40,"count":0,"samples":[]}\
+        ]}
+        """
 
         /// Only the fresh passes describe the frame just drawn, and a redraw
         /// pass sharing a name must not be counted among them.
@@ -468,8 +470,13 @@ final class MPVTests: XCTestCase {
 
         /// An empty list has to come back empty rather than as a line of noise,
         /// since it is what says the renderer ran nothing.
-        XCTAssertTrue(MPVRenderPasses.names(from: "fresh:\n\nredraw:\n").isEmpty)
+        XCTAssertTrue(MPVRenderPasses.names(from: #"{"fresh":[],"redraw":[]}"#).isEmpty)
         XCTAssertTrue(MPVRenderPasses.names(from: "").isEmpty)
+
+        /// The listing form is what the previous reader expected. Parsing it as
+        /// if it were the JSON must yield nothing rather than plausible names,
+        /// so a future format change fails loudly here.
+        XCTAssertTrue(MPVRenderPasses.names(from: "fresh:\n- output: last 12us\n").isEmpty)
     }
 
     @MainActor
