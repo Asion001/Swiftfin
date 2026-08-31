@@ -204,7 +204,8 @@ final class MPVUpscalerController: ObservableObject {
             .init(
                 shaders: shaderPaths,
                 options: configuration.options,
-                isMetalFXEnabled: isMetalFXSupported ? configuration.isMetalFXEnabled : nil
+                isMetalFXEnabled: isMetalFXSupported ? configuration.isMetalFXEnabled : nil,
+                metalFXSharpness: isMetalFXSupported ? configuration.metalFXSharpness : nil
             )
         )
     }

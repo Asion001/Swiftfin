@@ -519,19 +519,35 @@ private extension MPVClientCore {
         /// What was actually sent, so that "the picture does not change" can be
         /// told apart from "nothing was asked to change". Rate limited alongside
         /// the applications themselves, so this is one line per real change.
-        emit(
-            .log(
-                "Upscaler: metalfx=\(application.isMetalFXEnabled.map(String.init) ?? "unsupported"), "
-                    + "shaders=\(application.shaders.count), "
-                    + "scale=\(application.options["scale"] ?? "-"), "
-                    + "dither-depth=\(application.options["dither-depth"] ?? "-")"
-            )
-        )
+        let summary: [String] = [
+            "metalfx=" + (application.isMetalFXEnabled.map(String.init) ?? "unsupported"),
+            "metalfx-sharpness=" + (application.metalFXSharpness.map(MPVUpscaler.amountString) ?? "-"),
+            "shaders=" + String(application.shaders.count),
+            "scale=" + (application.options["scale"] ?? "-"),
+            "dither-depth=" + (application.options["dither-depth"] ?? "-"),
+            application.options["glsl-shader-opts"] ?? "-",
+        ]
+
+        emit(.log("Upscaler: " + summary.joined(separator: ", ")))
 
         if application.isMetalFXEnabled != nil {
             reportIfFailed(
                 mpv_set_property_string(handle, MPVUpscaler.metalFXOptionName, "no"),
                 operation: "leave current MetalFX pipeline"
+            )
+        }
+
+        /// Guarded rather than folded into `options`: the option only exists on
+        /// a build carrying Swiftfin's patch, and writing it anywhere else is
+        /// reported as an unknown option once per application.
+        if let metalFXSharpness = application.metalFXSharpness {
+            reportIfFailed(
+                mpv_set_property_string(
+                    handle,
+                    MPVUpscaler.metalFXSharpnessOptionName,
+                    MPVUpscaler.amountString(metalFXSharpness)
+                ),
+                operation: "set MetalFX sharpness"
             )
         }
 

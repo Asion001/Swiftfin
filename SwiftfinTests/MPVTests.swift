@@ -209,16 +209,31 @@ final class MPVTests: XCTestCase {
         let balanced = MPVUpscaler.configuration(provider: .shader, level: .balanced, isMetalFXSupported: false)
         let quality = MPVUpscaler.configuration(provider: .shader, level: .quality, isMetalFXSupported: false)
 
-        /// The cheapest tier costs nothing beyond better built-in scaling.
-        XCTAssertTrue(fast.shaders.isEmpty)
+        /// The cheapest tier costs nothing beyond better built-in scaling and
+        /// the sharpening pass every tier ends with.
+        XCTAssertEqual(fast.shaders, [MPVUpscaler.sharpenShaderFileName])
         XCTAssertEqual(fast.options["scale"], "ewa_lanczos")
         XCTAssertEqual(fast.options["scale-antiring"], "0.65")
         XCTAssertEqual(fast.options["dither-depth"], "no")
 
-        XCTAssertEqual(balanced.shaders, MPVShaderPreset.artCNNLight.shaderFileNames)
-        XCTAssertEqual(quality.shaders, MPVShaderPreset.artCNNHeavy.shaderFileNames)
+        XCTAssertEqual(
+            balanced.shaders,
+            MPVShaderPreset.artCNNLight.shaderFileNames + [MPVUpscaler.sharpenShaderFileName]
+        )
+        XCTAssertEqual(
+            quality.shaders,
+            MPVShaderPreset.artCNNHeavy.shaderFileNames + [MPVUpscaler.sharpenShaderFileName]
+        )
         XCTAssertEqual(balanced.options["dither-depth"], "no")
         XCTAssertEqual(quality.options["dither-depth"], "no")
+
+        /// Reconstruction alone is close to invisible at the factors a phone
+        /// asks for, so the sharpening amount is most of what separates one
+        /// tier from the next. A tier that sharpened by the same amount as the
+        /// one below it would be a tier the user cannot see.
+        XCTAssertEqual(fast.options["glsl-shader-opts"], "Sharpen/amount=0.25")
+        XCTAssertEqual(balanced.options["glsl-shader-opts"], "Sharpen/amount=0.55")
+        XCTAssertEqual(quality.options["glsl-shader-opts"], "Sharpen/amount=0.85")
     }
 
     /// Guards against an upstream rename silently producing an empty chain.
@@ -321,6 +336,10 @@ final class MPVTests: XCTestCase {
             lock.withLock { _application.shaders }
         }
 
+        var metalFXSharpness: Float? {
+            lock.withLock { _application.metalFXSharpness }
+        }
+
         var probeCount: Int {
             lock.withLock { _probeCount }
         }
@@ -346,6 +365,59 @@ final class MPVTests: XCTestCase {
         XCTAssertEqual(spy.probeCount, 1)
     }
 
+    /// MetalFX upscales outside libplacebo, in a second pass the shader chain
+    /// has already run before. A `SCALED` hook there fires at source
+    /// resolution, so it would sharpen the input to the upscaler rather than
+    /// its output, amplifying exactly what MetalFX then magnifies. The patched
+    /// renderer sharpens its own result instead.
+    @MainActor
+    func testMetalFXAsksTheRendererToSharpenRatherThanTheShaderChain() {
+        let quality = MPVUpscaler.configuration(
+            provider: .metalFX,
+            level: .quality,
+            isMetalFXSupported: true
+        )
+
+        XCTAssertTrue(quality.shaders.isEmpty)
+        XCTAssertEqual(quality.options["glsl-shader-opts"], "Sharpen/amount=0.00")
+        XCTAssertEqual(quality.metalFXSharpness, MPVUpscaler.sharpness(for: .quality))
+
+        let fast = MPVUpscaler.configuration(
+            provider: .metalFX,
+            level: .fast,
+            isMetalFXSupported: true
+        )
+
+        XCTAssertEqual(fast.metalFXSharpness, MPVUpscaler.sharpness(for: .fast))
+        XCTAssertNotEqual(fast.metalFXSharpness, quality.metalFXSharpness)
+    }
+
+    /// Both amounts have to be cleared, not merely left unset: whichever
+    /// provider ran last has already written its own, and an upscaler that is
+    /// off while still sharpening is not off.
+    func testTurningTheUpscalerOffClearsBothSharpeningAmounts() {
+        XCTAssertEqual(
+            MPVUpscaler.Configuration.disabled.options["glsl-shader-opts"],
+            "Sharpen/amount=0.00"
+        )
+        XCTAssertEqual(MPVUpscaler.Configuration.disabled.metalFXSharpness, 0)
+        XCTAssertTrue(MPVUpscaler.Configuration.disabled.shaders.isEmpty)
+    }
+
+    /// A build without the patch has no `metalfx-sharpness` to write, and
+    /// writing it anyway is reported as an unknown option on every application.
+    @MainActor
+    func testSharpnessIsNotSentToABuildWithoutThePatch() {
+        let spy = ClientSpy()
+        let controller = MPVUpscalerController()
+        controller.attach(to: spy)
+
+        controller.requestedProvider = .metalFX
+        controller.requestedMode = .quality
+
+        XCTAssertNil(spy.metalFXSharpness)
+    }
+
     @MainActor
     func testShaderTierSendsItsScalerOptionsToTheClient() {
         let spy = ClientSpy()
@@ -355,9 +427,10 @@ final class MPVTests: XCTestCase {
         controller.requestedProvider = .shader
         controller.requestedMode = .fast
 
-        /// The cheapest tier is defined as better built-in scaling rather than
-        /// a shader, so it is only distinguishable from Off by these options.
-        XCTAssertTrue(spy.shaders.isEmpty)
+        /// The cheapest tier reconstructs nothing, so apart from the sharpening
+        /// pass it is only distinguishable from Off by these options.
+        XCTAssertEqual(spy.shaders.count, 1)
+        XCTAssertEqual(spy.shaders.first.map { ($0 as NSString).lastPathComponent }, "Sharpen.glsl")
         XCTAssertEqual(spy.options["scale"], "ewa_lanczos")
         XCTAssertEqual(spy.options["cscale"], "ewa_lanczos")
         XCTAssertEqual(spy.options["dither-depth"], "no")
