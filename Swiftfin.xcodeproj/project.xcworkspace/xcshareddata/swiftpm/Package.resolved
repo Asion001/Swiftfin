@@ -159,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Asion001/MPVKit.git",
       "state" : {
-        "revision" : "2145d9888bebd62c2dcd953aa005f8d3a41a9ac2",
-        "version" : "1.0.0-swiftfin.3"
+        "revision" : "05c7040dc34385634d67444113ca3638b59ac73a",
+        "version" : "1.0.0-swiftfin.4"
       }
     },
     {
