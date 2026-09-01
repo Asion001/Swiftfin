@@ -483,6 +483,42 @@ private extension MPVClientCore {
         }
     }
 
+    /// Logs what MPV believes about subtitles once a file is playing.
+    ///
+    /// Subtitles disappearing has several causes that look identical from the
+    /// outside: no track selected, a track selected but switched off, an OSD
+    /// surface with no area to draw into, or a correctly configured renderer
+    /// with nothing to show at that timestamp. Only `sub-text` separates the
+    /// last one from the rest, so all four are reported together.
+    ///
+    /// Delayed because none of it is meaningful until a subtitle has had a
+    /// chance to appear.
+    func scheduleSubtitleReport() {
+        queue.asyncAfter(deadline: .now() + 6) { [weak self] in
+            self?.reportSubtitleState()
+        }
+    }
+
+    func reportSubtitleState() {
+        guard let handle else { return }
+
+        let track = getString(handle: handle, name: "sid") ?? "-"
+        let isVisible = getFlag(handle: handle, name: "sub-visibility")
+        let width = getInt64(handle: handle, name: "osd-dimensions/w") ?? -1
+        let height = getInt64(handle: handle, name: "osd-dimensions/h") ?? -1
+        let text = getString(handle: handle, name: "sub-text") ?? ""
+
+        let summary: [String] = [
+            "sid=" + track,
+            "visible=" + (isVisible.map(String.init) ?? "-"),
+            "osd=\(width)x\(height)",
+            "pos=" + (getString(handle: handle, name: "sub-pos") ?? "-"),
+            "text=" + (text.isEmpty ? "empty" : "\(text.count) chars"),
+        ]
+
+        emit(.log("Subtitles: " + summary.joined(separator: ", ")))
+    }
+
     /// Logs the render passes MPV last drew a frame with.
     ///
     /// `vo_gpu_next` collects these unconditionally, so this needs nothing
@@ -867,6 +903,7 @@ private extension MPVClientCore {
             case MPV_EVENT_FILE_LOADED:
                 rebuildTracks()
                 emit(.fileLoaded)
+                scheduleSubtitleReport()
             case MPV_EVENT_END_FILE:
                 handleEndFile(event.pointee.data)
             case MPV_EVENT_LOG_MESSAGE:

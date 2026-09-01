@@ -166,6 +166,34 @@ final class MPVTests: XCTestCase {
 
     // MARK: - Upscaler
 
+    /// ArtCNN gates every pass on how far the picture is being enlarged, and
+    /// upstream's threshold is 1.3x in both axes. A 1080p file on a 2360-wide
+    /// screen is 1.23x, so upstream's shader loads without error and skips
+    /// every pass, which is indistinguishable from an upscaler that does
+    /// nothing. The bundled copies are lowered to 1.0; refreshing them from
+    /// upstream has to fail here rather than quietly restore that.
+    func testBundledShadersRunWheneverThePictureIsEnlarged() throws {
+        let store = MPVConfigurationStore()
+
+        for name in MPVShaderPreset.allCases.flatMap(\.shaderFileNames) {
+            let url = try XCTUnwrap(store.shaderURL(named: name), name)
+            let source = try String(contentsOf: url, encoding: .utf8)
+            let gates = source
+                .split(separator: "\n")
+                .filter { $0.hasPrefix("//!WHEN") }
+
+            XCTAssertFalse(gates.isEmpty, "\(name) has no gate to check")
+
+            for gate in gates {
+                XCTAssertEqual(
+                    gate.trimmingCharacters(in: .whitespaces),
+                    "//!WHEN OUTPUT.w LUMA.w / 1.0 > OUTPUT.h LUMA.h / 1.0 > *",
+                    "\(name) would skip its passes on a modest upscale"
+                )
+            }
+        }
+    }
+
     func testUpscalerFallsBackWhenMetalFXIsUnavailable() {
         let unsupported = MPVUpscaler.configuration(
             provider: .metalFX,
