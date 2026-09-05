@@ -282,6 +282,20 @@ jobs:
           timeout_minutes: 20
           command: carthage update --use-xcframeworks --cache-builds
 
+      # Resolved separately so the Catalyst slices can be repaired before the
+      # build embeds them; see the script for what is wrong with them.
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Swiftfin.xcodeproj \
+            -scheme Swiftfin \
+            -derivedDataPath "$RUNNER_TEMP/SwiftfinMacDerivedData"
+
+      - name: Repair Mac Catalyst framework layout
+        run: |
+          bash Scripts/fix_catalyst_framework_layout.sh \
+            "$RUNNER_TEMP/SwiftfinMacDerivedData/SourcePackages/artifacts"
+
       - name: Build unsigned Apple silicon Mac app
         run: |
           xcodebuild -quiet \
