@@ -47,6 +47,11 @@ extension VideoPlayer {
                     )
                     .disabled(containerState.isPresentingSupplement)
 
+                if let playbackItem = manager.playbackItem, !containerState.isPresentingSupplement {
+                    MediaSegmentSkipButton(observer: playbackItem.mediaSegments)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+
                 PlaybackProgress()
                     .focused($isPlaybackProgressFocused)
                     .fixedSize(horizontal: false, vertical: true)
@@ -71,6 +76,9 @@ extension VideoPlayer {
                 Text(L10n.closePlayerWarning)
             }
             .onChange(of: containerState.isPresentingOverlay) {
+                // A skip button on screen is what the user most likely raised
+                // the overlay for, so leave focus where it already is.
+                guard manager.playbackItem?.mediaSegments.promptedSegment == nil else { return }
                 isPlaybackProgressFocused = true
             }
             .onChange(of: manager.playbackRequestStatus) {

@@ -52,6 +52,8 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
 
     let baseItem: BaseItemDto
     let deviceProfile: DeviceProfile
+    /// Intro, outro, and other server-marked segments of this item.
+    let mediaSegments: MediaSegmentsObserver
     let mediaSource: MediaSourceInfo
     let playSessionID: String
     let previewImageProvider: (any PreviewImageProvider)?
@@ -79,6 +81,7 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
         thumbnailProvider: ThumbnailProvider? = nil
     ) {
         self.baseItem = baseItem
+        self.mediaSegments = MediaSegmentsObserver(baseItem: baseItem)
         self.mediaSource = mediaSource
         self.playSessionID = playSessionID
         self.requestedBitrate = requestedBitrate
@@ -119,6 +122,7 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
             ?? mediaSource.defaultSubtitleStreamIndex
             ?? -1
 
+        observers.append(mediaSegments)
         observers.append(MediaProgressObserver(item: self))
     }
 

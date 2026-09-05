@@ -31,6 +31,15 @@ deadline follows wall-clock time through buffering, background audio, and signif
 changes. At expiry, Swiftfin pauses playback and releases its screen-awake state; manually resuming
 playback restores the previous screen-awake behavior.
 
+Intro and outro skipping is player-agnostic and works on tvOS as well. When the server reports
+media segments for the playing item — Jellyfin 10.10 or later with a plugin that marks them, such
+as [Intro Skipper](https://github.com/intro-skipper/intro-skipper) — the player either offers a
+skip button for the length of the segment or jumps past it outright. Each segment type (intro,
+outro, recap, preview, commercial) is configured separately under *Video Player → Skip Segments*;
+intros, outros, and commercials offer a button by default, and recaps and previews are left alone.
+Skipping an outro that runs to the end of the item stops a moment short of the runtime so playback
+finishes normally and the queue advances.
+
 See [the MPV player documentation](mpv.md) for how the player is wired and how the patched libmpv
 is built.
 
@@ -47,6 +56,7 @@ is built.
 | **Deinterlacing**          | ✅                | ❌                | ✅ libplacebo     |
 | **Upscaling**              | ❌                | ❌                | ✅ ArtCNN / MetalFX [5] |
 | **Sleep Timer**            | ✅ iOS/iPadOS      | ✅ iOS/iPadOS      | ✅ iOS/iPadOS     |
+| **Intro / Outro Skipping** | ✅ [7]            | ✅ [7]            | ✅ [7]           |
 | **Player Controls**        | Speed, aspect fill, chapters, subtitles, trickplay, audio tracks, customizable UI | Speed, aspect fill | Existing Swiftfin controls plus upscaling modes and text-subtitle positioning |
 | **Picture-in-Picture**     | ❌                | ✅                | ❌ [6]           |
 | **TLS Support**            | 1.1, 1.2 [3]      | 1.1, 1.2, 1.3     | 1.1, 1.2, 1.3    |
@@ -66,6 +76,8 @@ is built.
 [5] MetalFX requires Swiftfin's patched libmpv build; see [the MPV documentation](mpv.md).
 
 [6] MPV renders into its own Metal layer rather than an `AVPlayerLayer`, which both AirPlay video and Picture in Picture require.
+
+[7] Requires a server that reports media segments; see the note above.
 
 ---
 

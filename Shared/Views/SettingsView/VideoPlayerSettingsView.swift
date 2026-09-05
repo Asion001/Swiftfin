@@ -47,6 +47,19 @@ struct VideoPlayerSettingsView: View {
     @Default(.VideoPlayer.menuActionButtons)
     private var menuActionButtons
 
+    // MARK: - Media Segment Defaults
+
+    @Default(.VideoPlayer.MediaSegments.intro)
+    private var introSegmentAction
+    @Default(.VideoPlayer.MediaSegments.outro)
+    private var outroSegmentAction
+    @Default(.VideoPlayer.MediaSegments.recap)
+    private var recapSegmentAction
+    @Default(.VideoPlayer.MediaSegments.preview)
+    private var previewSegmentAction
+    @Default(.VideoPlayer.MediaSegments.commercial)
+    private var commercialSegmentAction
+
     // MARK: - Resume Defaults
 
     @Default(.VideoPlayer.resumeOffset)
@@ -109,6 +122,8 @@ struct VideoPlayerSettingsView: View {
             buttonSettings
 
             resumeSettings
+
+            mediaSegmentSettings
 
             sliderSettings
 
@@ -259,6 +274,23 @@ struct VideoPlayerSettingsView: View {
             Text(L10n.resume)
         } footer: {
             Text(L10n.resumeOffsetDescription)
+        }
+    }
+
+    // MARK: - Media Segment Settings
+
+    @ViewBuilder
+    private var mediaSegmentSettings: some View {
+        Section {
+            PlatformPicker(MediaSegmentType.intro.displayTitle, selection: $introSegmentAction)
+            PlatformPicker(MediaSegmentType.outro.displayTitle, selection: $outroSegmentAction)
+            PlatformPicker(MediaSegmentType.recap.displayTitle, selection: $recapSegmentAction)
+            PlatformPicker(MediaSegmentType.preview.displayTitle, selection: $previewSegmentAction)
+            PlatformPicker(MediaSegmentType.commercial.displayTitle, selection: $commercialSegmentAction)
+        } header: {
+            Text(MediaSegmentStrings.title)
+        } footer: {
+            Text(MediaSegmentStrings.settingsFooter)
         }
     }
 
