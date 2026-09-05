@@ -116,6 +116,9 @@ jobs:
       - name: Install Homebrew dependencies
         run: brew bundle --file Brewfile
 
+      - name: Install pinned SwiftFormat
+        run: bash Scripts/install_ci_swiftformat.sh
+
       - name: Update Carthage
         run: carthage update --use-xcframeworks --cache-builds
 
