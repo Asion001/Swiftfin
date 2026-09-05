@@ -107,6 +107,13 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     private var lastAppliedZoom: Double?
     private var lastSubtitleOptions: [String: String] = [:]
 
+    private let isAudioOnly: Bool
+
+    /// Whether the video track has been dropped for the duration of a trip to
+    /// the background. See `suspendVideoForBackground()`.
+    private var isVideoSuspendedForBackground = false
+    private var lifecycleObservers: [AnyCancellable] = []
+
     weak var manager: MediaPlayerManager? {
         didSet {
             for var observer in observers {
@@ -142,6 +149,7 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         client: MPVClientCore? = nil
     ) {
         self.configurationStore = configurationStore
+        self.isAudioOnly = audioOnly
         self.upscaler = MPVUpscalerController(configurationStore: configurationStore)
         self.client = client ?? MPVClientCore(configurationStore: configurationStore)
         self.client.setEventHandler { [weak self] event in
@@ -153,6 +161,54 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
         if audioOnly {
             self.client.prepareForAudioPlayback()
         }
+
+        observeApplicationLifecycle()
+    }
+
+    // MARK: - Application lifecycle
+
+    /// iOS stops vending drawables to a backgrounded app, and doing GPU work
+    /// there is grounds for termination. MPV renders into its own
+    /// `CAMetalLayer`, so unlike an `AVPlayerLayer` nothing steps in to stop it.
+    ///
+    /// Only playback that has been asked to continue in the background is
+    /// touched. With the default setting the player is paused on the way out, so
+    /// there is nothing rendering and no reason to pay for reloading the video
+    /// track on the way back in.
+    private func observeApplicationLifecycle() {
+        guard !isAudioOnly else { return }
+
+        Notifications[.applicationDidEnterBackground]
+            .publisher
+            .sink { [weak self] _ in
+                self?.suspendVideoForBackground()
+            }
+            .store(in: &lifecycleObservers)
+
+        Notifications[.applicationWillEnterForeground]
+            .publisher
+            .sink { [weak self] _ in
+                self?.resumeVideoForForeground()
+            }
+            .store(in: &lifecycleObservers)
+    }
+
+    private func suspendVideoForBackground() {
+        guard !isVideoSuspendedForBackground,
+              !Defaults[.VideoPlayer.Transition.pauseOnBackground]
+        else {
+            return
+        }
+
+        isVideoSuspendedForBackground = true
+        client.setOption(name: "vid", value: "no")
+    }
+
+    private func resumeVideoForForeground() {
+        guard isVideoSuspendedForBackground else { return }
+
+        isVideoSuspendedForBackground = false
+        client.setOption(name: "vid", value: "auto")
     }
 
     func play() {

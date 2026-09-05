@@ -20,6 +20,15 @@ MPV renders directly into a `CAMetalLayer` handed to it as `wid`, using `vo=gpu-
 `gpu-api=vulkan`, `gpu-context=moltenvk`. Because it owns that layer rather than an `AVPlayerLayer`,
 **Picture in Picture and AirPlay video are not available** with this player.
 
+### Backgrounding
+
+Because MPV owns its `CAMetalLayer`, nothing stops it rendering when the app leaves the foreground —
+and iOS neither vends drawables to a backgrounded app nor tolerates GPU work from one. With the
+default *Pause on background* setting playback is paused on the way out, so nothing is rendering.
+When that setting is off, the proxy sets `vid=no` on backgrounding and `vid=auto` on return, leaving
+the audio the app is allowed to keep playing to carry on without the renderer. Expect a brief
+reload of the video track on the way back in.
+
 ### Option precedence
 
 Swiftfin applies its own options before `mpv_initialize`. MPV reads `mpv.conf` *during* initialize,
