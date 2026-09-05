@@ -25,9 +25,9 @@ extension BaseItemKind: SupportedCaseIterable {
             .series,
             .video,
         ]
-        #if os(iOS)
-        .appending([.audio, .musicAlbum, .musicArtist, .musicGenre, .playlist])
-        #endif
+            #if os(iOS)
+                .appending([.audio, .musicAlbum, .musicArtist, .musicGenre, .playlist])
+            #endif
     }
 }
 

@@ -59,23 +59,35 @@ jobs:
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
 
-            if [ "$(gh api "repos/${{ github.repository }}" --jq .has_issues)" = "true" ]; then
-              issue_number=$(gh issue list --state open --search 'Upstream sync conflict in:title' --json number --jq '.[0].number // empty')
-              body="Automatic sync with jellyfin/Swiftfin main found conflicts and left the fork unchanged. Conflicting files:\n\n$conflicts\n\nSee workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "::error::Upstream merge failed; resolve the conflicts listed in the job summary."
+
+            if [ "$(gh api "repos/${{ github.repository }}" --jq .has_issues || echo false)" = "true" ]; then
+              issue_number=$(gh issue list --state open --search 'Upstream sync conflict in:title' --json number --jq '.[0].number // empty' || true)
+              body_file=$(mktemp)
+              {
+                echo "Automatic sync with jellyfin/Swiftfin main found conflicts and left the fork unchanged."
+                echo
+                echo '```'
+                echo "$conflicts"
+                echo '```'
+                echo
+                echo "See workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              } > "$body_file"
               if [ -n "$issue_number" ]; then
-                gh issue comment "$issue_number" --body "$body"
+                gh issue comment "$issue_number" --body-file "$body_file" || echo "::warning::Could not update the conflict issue; see the job summary."
               else
-                gh issue create --title "Upstream sync conflict" --body "$body"
+                gh issue create --title "Upstream sync conflict" --body-file "$body_file" || echo "::warning::Could not create the conflict issue; see the job summary."
               fi
+              rm -f "$body_file"
             fi
             exit 1
           fi
 
           git push origin HEAD:main
 
-          if [ "$(gh api "repos/${{ github.repository }}" --jq .has_issues)" = "true" ]; then
-            issue_number=$(gh issue list --state open --search 'Upstream sync conflict in:title' --json number --jq '.[0].number // empty')
+          if [ "$(gh api "repos/${{ github.repository }}" --jq .has_issues || echo false)" = "true" ]; then
+            issue_number=$(gh issue list --state open --search 'Upstream sync conflict in:title' --json number --jq '.[0].number // empty' || true)
             if [ -n "$issue_number" ]; then
-              gh issue close "$issue_number" --comment "Automatic upstream synchronization is working again."
+              gh issue close "$issue_number" --comment "Automatic upstream synchronization is working again." || echo "::warning::Sync succeeded, but the conflict issue could not be closed."
             fi
           fi

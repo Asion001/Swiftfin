@@ -130,51 +130,51 @@ extension VideoPlayer {
                 }
                 #if os(iOS)
                 .environment(
-                    \.longPressAction,
-                    .init(
-                        action: {
-                            containerState.containerView?.handleLongPressGesture(
-                                location: $0,
-                                unitPoint: $1,
-                                state: $2
-                            )
-                        }
+                        \.longPressAction,
+                        .init(
+                            action: {
+                                containerState.containerView?.handleLongPressGesture(
+                                    location: $0,
+                                    unitPoint: $1,
+                                    state: $2
+                                )
+                            }
+                        )
                     )
-                )
-                .environment(
-                    \.panAction,
-                    .init(
-                        action: {
-                            containerState.containerView?.handlePanGesture(
-                                translation: $0,
-                                velocity: $1,
-                                location: $2,
-                                unitPoint: $3,
-                                state: $4
-                            )
-                        }
+                    .environment(
+                        \.panAction,
+                        .init(
+                            action: {
+                                containerState.containerView?.handlePanGesture(
+                                    translation: $0,
+                                    velocity: $1,
+                                    location: $2,
+                                    unitPoint: $3,
+                                    state: $4
+                                )
+                            }
+                        )
                     )
-                )
-                .environment(
-                    \.pinchAction,
-                    .init(
-                        action: {
-                            containerState.containerView?.handlePinchGesture(scale: $0, velocity: $1, state: $2)
-                        }
+                    .environment(
+                        \.pinchAction,
+                        .init(
+                            action: {
+                                containerState.containerView?.handlePinchGesture(scale: $0, velocity: $1, state: $2)
+                            }
+                        )
                     )
-                )
-                .environment(
-                    \.tapGestureAction,
-                    .init(
-                        action: {
-                            containerState.containerView?.handleTapGesture(
-                                location: $0,
-                                unitPoint: $1,
-                                count: $2
-                            )
-                        }
+                    .environment(
+                        \.tapGestureAction,
+                        .init(
+                            action: {
+                                containerState.containerView?.handleTapGesture(
+                                    location: $0,
+                                    unitPoint: $1,
+                                    count: $2
+                                )
+                            }
+                        )
                     )
-                )
                 #endif
             }
         }

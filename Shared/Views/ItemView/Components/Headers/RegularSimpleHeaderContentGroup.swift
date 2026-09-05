@@ -49,29 +49,15 @@ extension ItemView {
                 ].contains(provider.item.type)
             }
 
-            @ViewBuilder
             private var controls: some View {
-                if usesMusicControlRow {
-                    HStack(spacing: 12) {
-                        ItemView.ActionButtonHStack(provider: provider)
-
-                        Spacer(minLength: 16)
-
-                        if provider.item.presentPlayButton {
-                            PlayButton(provider: provider)
-                                .frame(maxWidth: 220)
-                        }
-                    }
-                    .frame(maxWidth: 520)
-                } else {
-                    VStack(alignment: .leading, spacing: UIDevice.isTV ? 25 : 5) {
-                        if provider.item.presentPlayButton {
-                            PlayButton(provider: provider)
-                        }
-
-                        ItemView.ActionButtonHStack(provider: provider)
-                    }
-                    .frame(maxWidth: UIDevice.isTV ? 450 : 300, alignment: .leading)
+                ItemView.ActionBar(
+                    provider: provider,
+                    alignment: .leading,
+                    usesMusicControlRow: usesMusicControlRow
+                )
+                .frame(maxWidth: usesMusicControlRow ? 520 : UIDevice.isTV ? 450 : 300, alignment: .leading)
+                .if(UIDevice.isTV) { buttons in
+                    buttons.padding(.vertical)
                 }
             }
 
@@ -107,8 +93,8 @@ extension ItemView {
                     )
                     #if os(tvOS)
                     .posterBorder()
-                    .posterCornerRadius(posterDisplayType)
-                    .subtleShadow()
+                        .posterCornerRadius(posterDisplayType)
+                        .subtleShadow()
                     #endif
                     .frame(
                         maxWidth: .infinity,
