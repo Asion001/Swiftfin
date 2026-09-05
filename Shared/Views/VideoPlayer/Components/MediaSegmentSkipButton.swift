@@ -15,16 +15,23 @@ extension VideoPlayer {
     ///
     /// It is deliberately independent of the overlay: an intro is skipped
     /// without first summoning the rest of the controls.
+    ///
+    /// Its own padding and alignment are applied here rather than by the caller
+    /// so that an idle button is an `EmptyView` and takes no room in the stack
+    /// holding it — a modifier applied outside would give it a layout slot, and
+    /// with it a stack's spacing, for the whole of every item with no segments.
     struct MediaSegmentSkipButton: View {
+
+        #if os(iOS)
+        @Environment(\.safeAreaInsets)
+        private var safeAreaInsets
+        #endif
 
         @EnvironmentObject
         private var containerState: VideoPlayerContainerState
 
         @ObservedObject
         private var observer: MediaSegmentsObserver
-
-        @Toaster
-        private var toaster: ToastProxy
 
         #if os(tvOS)
         @FocusState
@@ -44,18 +51,16 @@ extension VideoPlayer {
         // MARK: body
 
         var body: some View {
-            Group {
-                if let segment = observer.promptedSegment, isPresentable {
-                    button(for: segment)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
-            }
-            .animation(.bouncy(duration: 0.3), value: observer.promptedSegment)
-            .onReceive(observer.didAutoSkip) { segment in
-                toaster.present(
-                    MediaSegmentStrings.skipped(segment.type.displayTitle),
-                    systemName: "forward.end.fill"
-                )
+            if let segment = observer.promptedSegment, isPresentable {
+                button(for: segment)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    #if os(iOS)
+                    .padding(.leading, safeAreaInsets.leading)
+                    .padding(.trailing, safeAreaInsets.trailing + EdgeInsets.edgePadding)
+                    .padding(.bottom, EdgeInsets.edgePadding / 2)
+                    #endif
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .animation(.bouncy(duration: 0.3), value: segment)
             }
         }
 

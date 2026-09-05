@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Combine
 import FactoryKit
 import SwiftUI
 import Transmission
@@ -38,13 +39,24 @@ struct VideoPlayer: View {
 
     @StateObject
     private var containerState: VideoPlayerContainerState = .init()
-    #if os(iOS)
+
     @Toaster
     private var toaster
 
+    #if os(iOS)
     @StateObject
     private var sleepTimerController: SleepTimerController = .init()
     #endif
+
+    /// Automatic segment skips for whichever item is playing, or nothing while
+    /// there is no item. Re-resolved as the item changes, which resubscribes.
+    private var mediaSegmentAutoSkips: AnyPublisher<MediaSegment, Never> {
+        manager.playbackItem?
+            .mediaSegments
+            .didAutoSkip
+            .eraseToAnyPublisher()
+            ?? Combine.Empty<MediaSegment, Never>().eraseToAnyPublisher()
+    }
 
     init(proxy: (any VideoMediaPlayerProxy)? = nil) {
         #if targetEnvironment(macCatalyst)
@@ -140,6 +152,14 @@ struct VideoPlayer: View {
             // at the player level for every backend.
             guard !containerState.isScrubbing else { return }
             containerState.scrubbedSeconds.value = newSeconds
+        }
+        .onReceive(mediaSegmentAutoSkips) { segment in
+            // Announced here rather than from the skip button: an automatic skip
+            // never shows one, and this view is mounted for the whole session.
+            toaster.present(
+                MediaSegmentStrings.skipped(segment.type.displayTitle),
+                systemName: "forward.end.fill"
+            )
         }
         .onReceive(manager.$state) { newState in
             if newState == .stopped, !isBeingDismissedByTransition {

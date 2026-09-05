@@ -65,10 +65,6 @@ extension VideoPlayer {
 
                     if let playbackItem = manager.playbackItem {
                         MediaSegmentSkipButton(observer: playbackItem.mediaSegments)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .padding(.leading, safeAreaInsets.leading)
-                            .padding(.trailing, safeAreaInsets.trailing + EdgeInsets.edgePadding)
-                            .padding(.bottom, EdgeInsets.edgePadding / 2)
                     }
 
                     PlaybackProgress()
