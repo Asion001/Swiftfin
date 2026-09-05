@@ -47,7 +47,7 @@ extension VideoPlayer {
                     )
                     .disabled(containerState.isPresentingSupplement)
 
-                if let playbackItem = manager.playbackItem, !containerState.isPresentingSupplement {
+                if let playbackItem = manager.playbackItem {
                     MediaSegmentSkipButton(observer: playbackItem.mediaSegments)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }

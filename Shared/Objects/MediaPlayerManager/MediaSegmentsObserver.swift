@@ -30,6 +30,10 @@ final class MediaSegmentsObserver: ViewModel, MediaPlayerObserver {
     @Published
     private(set) var promptedSegment: MediaSegment?
 
+    /// Fires when a segment is skipped without asking, so the UI can say why
+    /// playback jumped rather than leaving it as an unexplained stutter.
+    let didAutoSkip = PassthroughSubject<MediaSegment, Never>()
+
     weak var manager: MediaPlayerManager? {
         didSet {
             guard let manager else { return }
@@ -65,6 +69,46 @@ final class MediaSegmentsObserver: ViewModel, MediaPlayerObserver {
     }
 
     // MARK: - Skipping
+
+    /// The title of the button offered for `segment`.
+    func promptTitle(for segment: MediaSegment) -> String {
+        nextItemProvider(after: segment) == nil ? segment.type.skipTitle : L10n.playNextItem
+    }
+
+    /// The system image of the button offered for `segment`.
+    func promptSystemImage(for segment: MediaSegment) -> String {
+        nextItemProvider(after: segment) == nil ? "forward.end.fill" : "chevron.right.circle"
+    }
+
+    /// Acts on the button offered for `segment`.
+    ///
+    /// An outro that runs to the end of the item has nothing left to seek to, so
+    /// there the button moves straight to whatever is queued behind it. This is
+    /// an explicit press, so it goes ahead whether or not the user has next
+    /// episode autoplay turned on — unlike an automatic skip, which lets the
+    /// item end and leaves that decision where it already lives.
+    func act(on segment: MediaSegment) {
+        if let provider = nextItemProvider(after: segment) {
+            dismissedSegmentIDs.insert(segment.id)
+            promptedSegment = nil
+            manager?.playNewItem(provider: provider)
+            return
+        }
+
+        skip(segment)
+    }
+
+    /// What skipping `segment` should move to when the segment runs to the end
+    /// of the item and something is queued behind it.
+    private func nextItemProvider(after segment: MediaSegment) -> MediaPlayerItemProvider? {
+        guard let manager,
+              MediaSegmentResolver.endsItem(segment, runtime: manager.item.runtime)
+        else {
+            return nil
+        }
+
+        return manager.queue?.nextItem
+    }
 
     /// Seeks past `segment`, resuming playback if it was paused.
     func skip(_ segment: MediaSegment) {
@@ -133,6 +177,7 @@ final class MediaSegmentsObserver: ViewModel, MediaPlayerObserver {
             autoSkippedSegmentIDs.insert(segment.id)
 
             skip(segment)
+            didAutoSkip.send(segment)
         }
     }
 

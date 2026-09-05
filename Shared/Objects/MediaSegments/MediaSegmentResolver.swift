@@ -42,6 +42,13 @@ enum MediaSegmentResolver {
             .max { $0.start < $1.start }
     }
 
+    /// Whether skipping `segment` finishes the item rather than landing back
+    /// inside it, which is the usual shape of an outro.
+    static func endsItem(_ segment: MediaSegment, runtime: Duration?) -> Bool {
+        guard let runtime, runtime > .zero else { return false }
+        return (runtime - segment.end) <= minimumRemaining
+    }
+
     /// Where playback lands when a segment is skipped.
     ///
     /// An outro usually runs to the very end of the item. Seeking exactly there

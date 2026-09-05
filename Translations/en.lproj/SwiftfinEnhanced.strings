@@ -44,6 +44,7 @@
 "media-segment.skip.preview" = "Skip Preview";
 "media-segment.skip.recap" = "Skip Recap";
 "media-segment.skip.unknown" = "Skip";
+"media-segment.skipped" = "Skipped %@";
 "media-segment.title" = "Skip Segments";
 "media-segment.unknown" = "Unknown";
 "mpv.config.advanced" = "Advanced";

@@ -23,6 +23,9 @@ extension VideoPlayer {
         @ObservedObject
         private var observer: MediaSegmentsObserver
 
+        @Toaster
+        private var toaster: ToastProxy
+
         #if os(tvOS)
         @FocusState
         private var isFocused: Bool
@@ -32,13 +35,27 @@ extension VideoPlayer {
             self.observer = observer
         }
 
+        /// A panel covers the button, and a locked screen is a request to not be
+        /// offered anything at all.
+        private var isPresentable: Bool {
+            !containerState.isPresentingSupplement && !containerState.isGestureLocked
+        }
+
         // MARK: body
 
         var body: some View {
-            if let segment = observer.promptedSegment {
-                button(for: segment)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                    .animation(.bouncy(duration: 0.3), value: segment.id)
+            Group {
+                if let segment = observer.promptedSegment, isPresentable {
+                    button(for: segment)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(.bouncy(duration: 0.3), value: observer.promptedSegment)
+            .onReceive(observer.didAutoSkip) { segment in
+                toaster.present(
+                    MediaSegmentStrings.skipped(segment.type.displayTitle),
+                    systemName: "forward.end.fill"
+                )
             }
         }
 
@@ -46,15 +63,18 @@ extension VideoPlayer {
         private func button(for segment: MediaSegment) -> some View {
             Button {
                 containerState.timer.poke()
-                observer.skip(segment)
+                observer.act(on: segment)
             } label: {
-                Label(segment.type.skipTitle, systemImage: "forward.end.fill")
-                    #if os(tvOS)
-                        .font(.callout.weight(.semibold))
-                    #else
-                        .font(.subheadline.weight(.semibold))
-                    #endif
-                    .labelStyle(.titleAndIcon)
+                Label(
+                    observer.promptTitle(for: segment),
+                    systemImage: observer.promptSystemImage(for: segment)
+                )
+                #if os(tvOS)
+                .font(.callout.weight(.semibold))
+                #else
+                    .font(.subheadline.weight(.semibold))
+                #endif
+                .labelStyle(.titleAndIcon)
             }
             #if os(tvOS)
             .buttonStyle(.borderedProminent)

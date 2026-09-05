@@ -12,6 +12,11 @@ enum MediaSegmentStrings {
 
     static let title = String(enhancedLocalized: "media-segment.title", defaultValue: "Skip Segments")
 
+    /// Feedback after a segment is skipped without asking.
+    static func skipped(_ type: String) -> String {
+        String(enhancedLocalized: "media-segment.skipped", defaultValue: "Skipped \(type)")
+    }
+
     static let settingsFooter = String(
         enhancedLocalized: "media-segment.settings-footer",
         defaultValue: "Segments come from the server and require Jellyfin 10.10 or later with a plugin that marks them, such as Intro Skipper. Items without segments are unaffected."

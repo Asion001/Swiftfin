@@ -63,10 +63,7 @@ extension VideoPlayer {
                     Spacer()
                         .allowsHitTesting(false)
 
-                    if let playbackItem = manager.playbackItem,
-                       !isPresentingSupplement,
-                       !containerState.isGestureLocked
-                    {
+                    if let playbackItem = manager.playbackItem {
                         MediaSegmentSkipButton(observer: playbackItem.mediaSegments)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                             .padding(.leading, safeAreaInsets.leading)

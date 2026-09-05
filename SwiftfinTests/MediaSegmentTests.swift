@@ -142,6 +142,21 @@ final class MediaSegmentTests: XCTestCase {
         )
     }
 
+    func testEndsItemRecognizesAnOutroThatRunsToTheEnd() {
+        let outro = MediaSegment(id: "outro", type: .outro, start: .seconds(1400), end: .seconds(1500))
+
+        XCTAssertTrue(MediaSegmentResolver.endsItem(outro, runtime: .seconds(1500)))
+        XCTAssertTrue(MediaSegmentResolver.endsItem(outro, runtime: .seconds(1500.5)))
+
+        // A mid-item outro still has content behind it.
+        XCTAssertFalse(MediaSegmentResolver.endsItem(outro, runtime: .seconds(1600)))
+        XCTAssertFalse(MediaSegmentResolver.endsItem(intro, runtime: .seconds(1500)))
+
+        // Without a runtime there is nothing to compare against.
+        XCTAssertFalse(MediaSegmentResolver.endsItem(outro, runtime: nil))
+        XCTAssertFalse(MediaSegmentResolver.endsItem(outro, runtime: .zero))
+    }
+
     // MARK: - Types
 
     func testSkippableCasesExcludeUnknown() {
