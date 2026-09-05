@@ -23,6 +23,17 @@
       "versions": [
         {
           "version": "2026.9.5",
+          "buildVersion": "1788619315",
+          "marketingVersion": "Enhanced 2026.9.5 (1788619315)",
+          "date": "2026-09-05T14:41:55Z",
+          "localizedDescription": "Automated build from da3ad20. Includes the MPV player built on libmpv with VideoToolbox hardware decoding and libplacebo rendering, direct play for effectively any container and codec, MetalFX and ArtCNN shader upscaling, an MPV statistics page, screenshots, editable mpv.conf, customizable text-subtitle positioning, trickplay previews with chapter fallback, zoom-to-fill cropping, left-brightness and right-volume gestures, and a playback sleep timer. Also includes current upstream Swiftfin changes.",
+          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.9.5-1788619315/Swiftfin-Enhanced.ipa",
+          "size": 196647017,
+          "sha256": "89d147856267b83318f2e4cb7a9804ad037884199c8d59f55406d4d0ad804756",
+          "minOSVersion": "18.6"
+        },
+        {
+          "version": "2026.9.5",
           "buildVersion": "1788615991",
           "marketingVersion": "Enhanced 2026.9.5 (1788615991)",
           "date": "2026-09-05T13:46:31Z",
@@ -228,17 +239,6 @@
           "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.26-1787773160/Swiftfin-Enhanced.ipa",
           "size": 183216606,
           "sha256": "ff99e41ef5fb35a682c6429c6eb1996919981343bc7d973588d371e64672d485",
-          "minOSVersion": "18.6"
-        },
-        {
-          "version": "2026.8.24",
-          "buildVersion": "1787599245",
-          "marketingVersion": "Enhanced 2026.8.24 (1787599245)",
-          "date": "2026-08-24T19:20:45Z",
-          "localizedDescription": "Automated build from b83c028 with selectable MetalFX and experimental Anime4K enhancement, a visible orientation- and color-safe A/B comparison, stable player dialogs, Apple Pencil-safe controls, zoom-to-fill cropping, realtime quality profiles, source-FPS frame pacing, bounded processing buffering, PiP suspension, customizable subtitles, playback sleep timer, and current upstream Swiftfin changes.",
-          "downloadURL": "https://github.com/Asion001/Swiftfin/releases/download/enhanced-2026.8.24-1787599245/Swiftfin-Enhanced.ipa",
-          "size": 183212465,
-          "sha256": "53bdf0a8711e810b0e1a0b50129bd7b25e24a60ccb63e82dc1418f46b02b4d5f",
           "minOSVersion": "18.6"
         }
       ],
