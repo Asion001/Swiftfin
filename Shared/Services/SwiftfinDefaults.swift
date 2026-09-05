@@ -299,11 +299,19 @@ extension Defaults.Keys {
             UserKey("resumeOffset", default: 0)
         }
 
+        static var isAspectFilled: Key<Bool> {
+            UserKey("videoPlayerAspectFilled", default: false)
+        }
+
         static var supplements: Key<[VideoPlayerSupplement]> {
             UserKey(
                 "videoPlayerSupplements",
-                default: VideoPlayerSupplement.supportedCases
+                default: VideoPlayerSupplement.defaultCases
             )
+        }
+
+        static var hasRestoredPlayerSupplements: Key<Bool> {
+            UserKey("hasRestoredPlayerSupplements", default: false)
         }
 
         static var videoPlayerType: Key<VideoPlayerType> {

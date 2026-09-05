@@ -109,6 +109,16 @@ enum MPVUpscaler {
         }
     }
 
+    /// Spatial reconstruction already emphasizes edges. A second strong
+    /// unsharp mask makes diagonal lines and compressed surfaces look jagged.
+    static func metalFXSharpness(for level: VideoEnhancementLevel) -> Float {
+        switch level {
+        case .fast: 0
+        case .balanced: 0.05
+        case .quality: 0.10
+        }
+    }
+
     /// One complete renderer update.
     ///
     /// Keeping the shader list, scaler options, and MetalFX state together lets
@@ -164,9 +174,9 @@ enum MPVUpscaler {
             guard isMetalFXSupported else { return .disabled }
 
             return Configuration(
-                options: Configuration.scalerOptions(isEnhanced: false, isActive: true, sharpness: 0),
+                options: Configuration.scalerOptions(isEnhanced: true, isActive: true, sharpness: 0),
                 isMetalFXEnabled: true,
-                metalFXSharpness: sharpness
+                metalFXSharpness: metalFXSharpness(for: level)
             )
         case .shader:
             let preset = MPVShaderPreset(level: level)

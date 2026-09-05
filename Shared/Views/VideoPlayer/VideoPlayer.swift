@@ -69,6 +69,7 @@ struct VideoPlayer: View {
         #endif
         .onAppear {
             manager.proxy = proxy
+            applyVideoFraming()
             #if os(iOS)
             sleepTimerController.attach(to: manager)
             #endif
@@ -89,23 +90,10 @@ struct VideoPlayer: View {
             }
         }
         .onChange(of: containerState.isAspectFilled) {
-            /// For a player that can scale continuously, filling is just one
-            /// scale, so it is expressed as one rather than applied separately —
-            /// otherwise a pinch that lands off a detent would be pulled back by
-            /// this the moment it cleared the detent.
-            if let zoomProxy = proxy as? any MediaPlayerZoomConfigurable {
-                let target = containerState.isAspectFilled ? (zoomProxy.fillZoomScale ?? 1) : 1
-                guard abs(containerState.zoomScale - target) > 0.001 else { return }
-                containerState.zoomScale = target
-            } else {
-                UIView.animate(withDuration: 0.2) {
-                    proxy.setAspectFill(containerState.isAspectFilled)
-                }
-            }
+            applyVideoFraming()
         }
         .onChange(of: containerState.zoomScale) {
-            guard let zoomProxy = proxy as? any MediaPlayerZoomConfigurable else { return }
-            zoomProxy.setZoomScale(containerState.zoomScale)
+            applyVideoFraming()
         }
         .onChange(of: containerState.isScrubbing) {
             if containerState.isScrubbing {
@@ -137,8 +125,8 @@ struct VideoPlayer: View {
             manager.stop()
         }
         .onReceive(manager.$playbackItem) { newItem in
-            containerState.isAspectFilled = false
             containerState.zoomScale = 1
+            applyVideoFraming()
             audioOffset = .zero
             subtitleOffset = .zero
 
@@ -218,5 +206,13 @@ struct VideoPlayer: View {
             .preferredColorScheme(.dark)
         }
         #endif
+    }
+
+    private func applyVideoFraming() {
+        if let zoomProxy = proxy as? any MediaPlayerZoomConfigurable, !containerState.isAspectFilled {
+            zoomProxy.setZoomScale(containerState.zoomScale)
+        } else {
+            proxy.setAspectFill(containerState.isAspectFilled)
+        }
     }
 }

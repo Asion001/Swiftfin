@@ -65,7 +65,7 @@ extension VideoPlayer.UIVideoPlayerContainerViewController {
         let maximum = max(fill, 1) * 2
 
         if state == .began {
-            zoomScaleAtGestureStart = containerState.zoomScale
+            zoomScaleAtGestureStart = containerState.isAspectFilled ? fill : containerState.zoomScale
         }
 
         let start = zoomScaleAtGestureStart ?? containerState.zoomScale

@@ -408,7 +408,10 @@ final class MPVTests: XCTestCase {
 
         XCTAssertTrue(quality.shaders.isEmpty)
         XCTAssertEqual(quality.options["glsl-shader-opts"], "Sharpen/amount=0.00")
-        XCTAssertEqual(quality.metalFXSharpness, MPVUpscaler.sharpness(for: .quality))
+        XCTAssertEqual(quality.metalFXSharpness, MPVUpscaler.metalFXSharpness(for: .quality))
+        XCTAssertLessThanOrEqual(quality.metalFXSharpness, 0.10)
+        XCTAssertEqual(quality.options["cscale"], "ewa_lanczos")
+        XCTAssertEqual(quality.options["cscale-antiring"], "0.65")
 
         let fast = MPVUpscaler.configuration(
             provider: .metalFX,
@@ -416,7 +419,7 @@ final class MPVTests: XCTestCase {
             isMetalFXSupported: true
         )
 
-        XCTAssertEqual(fast.metalFXSharpness, MPVUpscaler.sharpness(for: .fast))
+        XCTAssertEqual(fast.metalFXSharpness, 0)
         XCTAssertNotEqual(fast.metalFXSharpness, quality.metalFXSharpness)
     }
 

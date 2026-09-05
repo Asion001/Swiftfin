@@ -172,7 +172,7 @@ extension VideoPlayer.UIVideoPlayerContainerViewController {
         case .none: ()
         case .aspectFill:
             guard checkGestureLock() else { return }
-            containerState.isAspectFilled.toggle()
+            containerState.toggleAspectFill()
         case .gestureLock:
             if containerState.isGestureLocked {
                 containerState.isGestureLocked = false

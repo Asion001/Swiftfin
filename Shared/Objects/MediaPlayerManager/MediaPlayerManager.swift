@@ -149,6 +149,14 @@ final class MediaPlayerManager: ViewModel {
 
     // TODO: replace with graph dependency package
     private func setSupplements() {
+        // Restore the missing panels once for existing users. Subsequent
+        // removals and ordering in Settings remain authoritative.
+        if !Defaults[.VideoPlayer.hasRestoredPlayerSupplements] {
+            Defaults[.VideoPlayer.hasRestoredPlayerSupplements] = true
+            Defaults[.VideoPlayer.supplements] = VideoPlayerSupplement.restoringMissingPanels(
+                in: Defaults[.VideoPlayer.supplements]
+            )
+        }
         var newSupplements = Defaults[.VideoPlayer.supplements].compactMap { kind -> (any MediaPlayerSupplement)? in
             switch kind {
             case .info:

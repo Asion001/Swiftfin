@@ -7,10 +7,72 @@
 //
 
 import CoreGraphics
+import Defaults
 @testable import Swiftfin_iOS
 import XCTest
 
 final class SubtitleConfigurationTests: XCTestCase {
+
+    @MainActor
+    func testMPVResizesASSWithoutScalingPlainTextTwice() {
+        var configuration = SubtitleConfiguration.default
+        let normal = MPVSubtitleOptions.options(for: configuration, surfaceHeight: 1000)
+        configuration.size = 20
+        let larger = MPVSubtitleOptions.options(for: configuration, surfaceHeight: 1000)
+
+        XCTAssertEqual(normal["sub-scale"], "1.0000")
+        XCTAssertEqual(larger["sub-scale"], "1.7333")
+        XCTAssertEqual(normal["sub-font-size"], larger["sub-font-size"])
+        XCTAssertEqual(larger["sub-ass-override"], "scale")
+    }
+
+    @MainActor
+    func testMPVSubtitlePositionUsesTheSurfaceSizeForPointOffsets() {
+        var configuration = SubtitleConfiguration.default
+        configuration.position = .insideVideo
+        configuration.verticalOffset = -50
+        let options = MPVSubtitleOptions.options(for: configuration, surfaceHeight: 500)
+        XCTAssertEqual(options["sub-pos"], "84.0")
+        XCTAssertEqual(options["sub-use-margins"], "no")
+        XCTAssertEqual(options["sub-ass-force-margins"], "no")
+
+        configuration.position = .lowerBlackBar
+        let margins = MPVSubtitleOptions.options(for: configuration, surfaceHeight: 1000, lowerBarHeight: 200)
+        XCTAssertEqual(margins["sub-pos"], "85.0")
+        XCTAssertEqual(margins["sub-ass-force-margins"], "yes")
+        XCTAssertEqual(MPVSubtitleOptions.options(for: configuration, surfaceHeight: 0)["sub-pos"], "94.0")
+        configuration.position = .screenBottom
+        XCTAssertEqual(MPVSubtitleOptions.options(for: configuration, surfaceHeight: 1000)["sub-pos"], "95.0")
+    }
+
+    @MainActor
+    func testFillPreferenceSurvivesAPlayerRecreationAndCanReturnToFit() {
+        let saved = Defaults[.VideoPlayer.isAspectFilled]
+        defer { Defaults[.VideoPlayer.isAspectFilled] = saved }
+        Defaults[.VideoPlayer.isAspectFilled] = false
+
+        let first = VideoPlayerContainerState()
+        first.toggleAspectFill()
+        XCTAssertTrue(Defaults[.VideoPlayer.isAspectFilled])
+        let next = VideoPlayerContainerState()
+        XCTAssertTrue(next.isAspectFilled)
+
+        next.zoomScale = 1.25
+        next.toggleAspectFill()
+        XCTAssertFalse(VideoPlayerContainerState().isAspectFilled)
+        XCTAssertEqual(next.zoomScale, 1)
+    }
+
+    func testMissingPlayerPanelsAreRestoredWithoutChangingExistingOrder() {
+        let selection: [VideoPlayerSupplement] = [.queue, .info, .chapters]
+        let restored = VideoPlayerSupplement.restoringMissingPanels(in: selection)
+        XCTAssertEqual(Array(restored.prefix(3)), selection)
+        XCTAssertTrue(restored.contains(.mpvStatistics))
+        XCTAssertTrue(restored.contains(.playbackInformation))
+        XCTAssertTrue(restored.contains(.people))
+        XCTAssertEqual(VideoPlayerSupplement.restoringMissingPanels(in: restored), restored)
+        XCTAssertFalse(VideoPlayerSupplement.supportedCases.contains(.mpvStatistics))
+    }
 
     func testEnhancedSubtitleGeometryUsesLowerBlackBarAndFallsBackSafely() {
         let container = CGSize(width: 2048, height: 1536)

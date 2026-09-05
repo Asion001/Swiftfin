@@ -59,5 +59,14 @@ enum VideoPlayerSupplement: String, CaseIterable, Displayable, Equatable, Identi
         }
     }
 
+    /// These panels cannot be removed. The others remain user-configurable.
     static let supportedCases: [VideoPlayerSupplement] = [.info, .chapters, .queue]
+
+    static var defaultCases: [VideoPlayerSupplement] {
+        allCases
+    }
+
+    static func restoringMissingPanels(in selection: [VideoPlayerSupplement]) -> [VideoPlayerSupplement] {
+        selection + defaultCases.filter { !selection.contains($0) }
+    }
 }

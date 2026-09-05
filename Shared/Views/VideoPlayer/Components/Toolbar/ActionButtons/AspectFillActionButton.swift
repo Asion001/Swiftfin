@@ -16,13 +16,12 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         private var containerState: VideoPlayerContainerState
 
         private var isAspectFilled: Bool {
-            get { containerState.isAspectFilled }
-            nonmutating set { containerState.isAspectFilled = newValue }
+            containerState.isAspectFilled
         }
 
         var body: some View {
             Button {
-                isAspectFilled.toggle()
+                containerState.toggleAspectFill()
             } label: {
                 Group {
                     if isAspectFilled {

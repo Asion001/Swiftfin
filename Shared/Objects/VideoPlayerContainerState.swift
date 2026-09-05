@@ -7,6 +7,7 @@
 //
 
 import Combine
+import Defaults
 import Foundation
 import SwiftUI
 
@@ -29,7 +30,16 @@ class VideoPlayerContainerState: ObservableObject {
     }
 
     @Published
-    var isAspectFilled: Bool = false
+    var isAspectFilled: Bool = Defaults[.VideoPlayer.isAspectFilled] {
+        didSet {
+            Defaults[.VideoPlayer.isAspectFilled] = isAspectFilled
+        }
+    }
+
+    func toggleAspectFill() {
+        zoomScale = 1
+        isAspectFilled.toggle()
+    }
 
     /// How far the picture is scaled past fitting the surface. `1` fits.
     ///

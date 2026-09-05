@@ -103,6 +103,9 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     private var sourceWidth = 0
     private var transferFunction: String?
     private var signalPeak: Double = 1
+    private var isAspectFilled = false
+    private var lastAppliedZoom: Double?
+    private var lastSubtitleOptions: [String: String] = [:]
 
     weak var manager: MediaPlayerManager? {
         didSet {
@@ -189,7 +192,8 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     }
 
     func setAspectFill(_ aspectFill: Bool) {
-        setZoomScale(aspectFill ? (fillZoomScale ?? 1) : 1)
+        isAspectFilled = aspectFill
+        applyZoomScale(aspectFill ? (fillZoomScale ?? 1) : 1)
     }
 
     /// Expressed to MPV as `video-zoom`, which is relative to the fitted size
@@ -199,7 +203,16 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     /// `panscan` is deliberately not used: it only spans fit to fill, and the
     /// point here is to stop short of filling, or to go past it.
     func setZoomScale(_ scale: CGFloat) {
-        client.setZoom(log2(max(0.01, Double(scale))))
+        isAspectFilled = false
+        applyZoomScale(scale)
+    }
+
+    private func applyZoomScale(_ scale: CGFloat) {
+        let zoom = log2(max(0.01, Double(scale)))
+        guard lastAppliedZoom != zoom else { return }
+        lastAppliedZoom = zoom
+        client.setZoom(zoom)
+        setSubtitleConfiguration(Defaults[.VideoPlayer.Subtitle.configuration])
     }
 
     var fillZoomScale: CGFloat? {
@@ -221,35 +234,24 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     }
 
     func setSubtitleConfiguration(_ configuration: SubtitleConfiguration) {
-        let basePosition: Double
-        switch configuration.position {
-        case .automatic, .lowerBlackBar, .screenBottom:
-            basePosition = 100
-            client.setOption(name: "sub-use-margins", value: "yes")
-            client.setOption(name: "sub-ass-force-margins", value: "yes")
-        case .insideVideo:
-            basePosition = 94
-            client.setOption(name: "sub-use-margins", value: "no")
-            client.setOption(name: "sub-ass-force-margins", value: "no")
-        }
-
-        let position = min(150, max(0, basePosition + Double(configuration.verticalOffset) / 10))
-        client.setOption(name: "sub-font", value: configuration.fontName)
-        client.setOption(
-            name: "sub-font-size",
-            value: String(Int(EnhancedSubtitleGeometry.fontPointSize(for: configuration.size)))
+        let source = CGSize(
+            width: displayWidth > 0 ? displayWidth : sourceWidth,
+            height: displayHeight > 0 ? displayHeight : sourceHeight
         )
-        client.setOption(name: "sub-color", value: Self.mpvColor(for: configuration.color))
-        client.setOption(name: "sub-pos", value: String(position))
-
-        /// MPV always applies the `sub-*` options to the formats it converts to
-        /// ASS itself — SubRip, WebVTT and the rest — so the font, size and
-        /// colour chosen here still reach them. `force` additionally replaces the
-        /// fonts, colours, borders and positioning that an ASS or SSA script
-        /// authored for itself, which is exactly what those subtitles carry
-        /// signs, karaoke and typesetting in. `scale`, MPV's own default, keeps
-        /// that intact while still honouring the position set above.
-        client.setOption(name: "sub-ass-override", value: "scale")
+        let surface = renderLayer.bounds.size
+        let fitted = VideoEnhancementGeometry.aspectRect(sourceSize: source, targetSize: surface, fill: false)
+        let zoom = pow(2, lastAppliedZoom ?? 0)
+        let lowerBarHeight = fitted.height > 0 ? max(0, (surface.height - fitted.height * zoom) / 2) : 0
+        let options = MPVSubtitleOptions.options(
+            for: configuration,
+            surfaceHeight: surface.height,
+            lowerBarHeight: lowerBarHeight
+        )
+        guard options != lastSubtitleOptions else { return }
+        lastSubtitleOptions = options
+        for (name, value) in options {
+            client.setOption(name: name, value: value)
+        }
     }
 
     /// A colour in the form MPV parses.
@@ -318,6 +320,10 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     /// layer it draws into was resized, so the view hosting it has to say so.
     func layerDidLayOut() {
         client.synchronizeWithLayerSize()
+        if isAspectFilled {
+            applyZoomScale(fillZoomScale ?? 1)
+        }
+        setSubtitleConfiguration(Defaults[.VideoPlayer.Subtitle.configuration])
     }
 
     @ViewBuilder
@@ -330,6 +336,10 @@ private extension MPVMediaPlayerProxy {
 
     func load(item: MediaPlayerItem, from seconds: Duration? = nil) {
         playbackItem = item
+        displayWidth = 0
+        displayHeight = 0
+        sourceWidth = 0
+        sourceHeight = 0
         isBuffering.value = true
         diagnostics.record(log: "Loading \(item.url.lastPathComponent)")
 
@@ -393,6 +403,11 @@ private extension MPVMediaPlayerProxy {
     func handleFileLoaded() {
         guard let playbackItem else { return }
         isBuffering.value = false
+        lastAppliedZoom = nil
+        lastSubtitleOptions = [:]
+        if isAspectFilled {
+            applyZoomScale(fillZoomScale ?? 1)
+        }
 
         for subtitle in playbackItem.subtitleStreams.sidecarSubtitles {
             guard let url = externalSubtitleURL(for: subtitle) else { continue }
@@ -421,8 +436,15 @@ private extension MPVMediaPlayerProxy {
             updateVideoSize()
         case let ("dwidth", .integer(width)):
             displayWidth = Int(width)
+            if isAspectFilled {
+                applyZoomScale(fillZoomScale ?? 1)
+            }
         case let ("dheight", .integer(height)):
             displayHeight = Int(height)
+            if isAspectFilled {
+                applyZoomScale(fillZoomScale ?? 1)
+            }
+            setSubtitleConfiguration(Defaults[.VideoPlayer.Subtitle.configuration])
         case let ("video-params/gamma", .string(gamma)):
             transferFunction = gamma
             updateDynamicRange()
@@ -518,6 +540,9 @@ enum MPVZoomGeometry {
 }
 
 private struct MPVPlayerSurface: UIViewRepresentable {
+    @Default(.VideoPlayer.Subtitle.configuration)
+    private var subtitleConfiguration
+
     @ObservedObject
     var proxy: MPVMediaPlayerProxy
 
@@ -527,6 +552,7 @@ private struct MPVPlayerSurface: UIViewRepresentable {
 
     func updateUIView(_ uiView: MPVPlayerUIView, context: Context) {
         uiView.updateDrawableSize()
+        proxy.setSubtitleConfiguration(subtitleConfiguration)
     }
 }
 

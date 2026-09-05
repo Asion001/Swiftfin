@@ -41,7 +41,7 @@ extension VideoPlayer {
                         input: "f",
                         modifierFlags: .command
                     ) { @MainActor in
-                        containerState.isAspectFilled.toggle()
+                        containerState.toggleAspectFill()
                     }
 
                     KeyCommandAction(
