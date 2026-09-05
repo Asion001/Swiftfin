@@ -90,8 +90,6 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
                     standardMenu(playbackItem: playbackItem)
                     #endif
                 }
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(.primary, .secondary)
                 .videoPlayerActionButtonTransition()
                 .assign(playbackItem.$selectedSubtitleStreamIndex, to: $selectedSubtitleStreamIndex)
                 .onChange(of: selectedSubtitleStreamIndex) {

@@ -17,6 +17,7 @@ struct MediaDownloadButton: View {
     enum Style {
         case icon
         case itemAction
+        case actionBar
     }
 
     @Injected(\.downloadManager)
@@ -63,6 +64,8 @@ struct MediaDownloadButton: View {
                 iconLabel
                     .labelStyle(.iconOnly)
                     .frame(width: 44, height: 44)
+            case .actionBar:
+                iconLabel
             case .itemAction:
                 iconLabel
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
