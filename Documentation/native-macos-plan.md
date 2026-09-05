@@ -8,6 +8,28 @@ A separate macOS target is not implemented by this document. The user confirmed 
 
 ## Proposed implementation
 
+### First prerequisite: native playback binaries
+
+The installed MPVKit artifacts were inspected after the user confirmed the native port. `Libmpv`, `Libavcodec`, `Libavdevice`, `Libavfilter`, `Libavformat`, `Libavutil`, `Libswresample`, and `Libswscale` currently contain only iOS device, iOS simulator and Mac Catalyst slices. None has a `SupportedPlatform = macos` entry. The package manifest advertising macOS support does not make these particular release artifacts linkable by a native target.
+
+Before integrating playback into the new application:
+
+1. Build the patched MPVKit/FFmpeg stack for macOS arm64. The MPVKit build tooling has a `platform=macos` path, but its output still needs packaging and validation for SwiftPM consumption.
+2. Produce XCFrameworks containing genuine macOS slices, preserving the existing iOS/Catalyst slices. Update artifact checksums and pin a tested dependency revision; do not change existing release URLs in place.
+3. Confirm every transitive native dependency, including the macOS-only Lua dependency, resolves. Inspect Mach-O platform/architecture and linked libraries, then test the patched MoltenVK layer host and MetalFX option on the MacBook.
+4. Only then connect the native `NSView` playback surface. A browser/player window with no usable playback dependency does not complete this prerequisite.
+
+### Reviewable implementation batches
+
+- **N1 — Playback dependency:** native artifacts and a small rendering/lifecycle smoke test; record build and playback evidence.
+- **N2 — Shared server boundary:** provider-scoped identity, catalog, credentials and playback contracts shared with the Silo work; retain the current Jellyfin adapter while migrating callers incrementally.
+- **N3 — Native application:** macOS target, SwiftUI sidebar/detail layout, native Settings, menus and window lifecycle; connect real Jellyfin login, library/search, details and episodes.
+- **N4 — Native playback and parity:** MPV surface, tracks/subtitles, resume/queue, fill, upscaling, statistics and downloads, followed by MacBook and iOS regression checks.
+
+Do not reuse Catalyst presentation controllers or the tablet navigation layout in N3. Use Mac window sizing, sidebar navigation, toolbar search, keyboard commands and pointer controls from the beginning. This addresses the user's dissatisfaction with the previous build's appearance as well as the binary-platform requirement.
+
+### Detailed work
+
 1. Add a `Swiftfin macOS` application target and shared scheme using the macOS SDK. Define its own Info.plist, entitlements, bundle identifier and signing settings. Start with arm64 for the MacBook; add Intel only after checking every binary dependency. Keep the existing Catalyst artifact available during the port.
 2. Extract Foundation-based account, connection, catalog and playback domain code into shared modules. Share the provider boundary described in [the Silo plan](silo-native-integration-plan.md). The current `UserSession`, `MediaPlayerItem` and view models directly depend on Jellyfin DTOs; avoid building a second incompatible data model just for Mac.
 3. Port app/session lifecycle to SwiftUI `App`, window scenes and AppKit. Replace UIKit navigation/presentation and platform helpers at their boundaries. The audit found UIKit references in 112 files under `Shared`; compiling them with `os(macOS)` alone will not supply their UIKit types.

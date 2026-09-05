@@ -76,6 +76,12 @@ Do not carry Silo server setup or infrastructure changes into this client task. 
 
 ## Delivery sequence and acceptance gates
 
+The native Mac direction is now confirmed: separate AppKit/SwiftUI application. Start the shared provider contracts before creating Mac-specific networking code. The native MPVKit artifacts are a separate prerequisite for Mac playback, not a reason to delay Silo's contract/fixture tests or change its protocol.
+
+The first implementation batch should add a platform-independent `Shared/Services/MediaServers` boundary with provider-scoped identity, capabilities, catalog queries, media metadata, playback plans and progress reporting. Keep Jellyfin DTO conversion inside its adapter; UI and engine contracts should use the shared domain types. Compile these types in both existing clients and the future native target. Test legacy connection decoding, ID collisions across providers/profiles, source/player clock conversion and cancellation of stale session results before adding the Silo login UI.
+
+Then introduce typed Silo v3 DTOs and fixture-driven decisions. Do not advertise Silo as connectable in the server picker until authentication, profile selection, catalog loading and playable/terminal plan handling form a complete path.
+
 ### 1. Backend boundary with Jellyfin unchanged
 
 Extract domain IDs, capabilities, catalog queries and playback request/response types. Wrap Jellyfin's current paths. Migrate connection storage with a backward-compatible default; introduce provider-aware caches and credentials.
