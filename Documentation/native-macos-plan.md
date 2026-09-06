@@ -4,11 +4,15 @@
 
 Audited on 2026-09-05. `Swiftfin.xcodeproj` has iOS, tvOS and test targets. The existing Mac application is built from the iOS target with Mac Catalyst. Its arm64 Debug build succeeded during this player-fix task. This is not a separate AppKit application.
 
-A separate macOS target is not implemented by this document. The user confirmed a separate native AppKit/SwiftUI application after finding the Catalyst build unsatisfactory. The implementation will use the macOS SDK and native Mac navigation, windows and controls.
+A production macOS target is not yet implemented. The user confirmed a separate native AppKit/SwiftUI application after finding the Catalyst build unsatisfactory. The implementation uses the macOS SDK and native Mac navigation, windows and controls.
+
+Implementation started on 2026-09-06: the pinned MPVKit source built successfully for native macOS in an isolated checkout. All eight rebuilt XCFramework archives contain macOS arm64/x86_64 slices. An arm64 AppKit [render-check application](../NativeMac/MPVRenderCheck/README.md) now links those native static libraries, retains its Metal layer through MPV shutdown, and supports native window resizing and local-file opening. Its dynamic dependencies are exclusively system libraries/frameworks. These are local native-only artifacts; the published multi-platform release and app dependency pin remain unchanged. The shared provider foundation also compiles independently on macOS, iOS and tvOS; adapters and production navigation remain outstanding.
+
+Validated on the Apple M4 host with the macOS 26.5 SDK: Mach-O reports `MACOS`, minimum OS 15.0; local signature verification passed. A 640×360 H.264 fixture decoded through VideoToolbox and rendered through `gpu-next`/MoltenVK. Renderer captures were inspected at 1920×1080 and, after resizing, 1440×1440 with correct letterboxing. The final smoke run exited 0 and logged completed MPV shutdown. It caught and resolved a nested AppKit run-loop quit hang. The shared contract suite passed 12 tests and the existing iOS simulator suite passed 67 tests. Fullscreen, display changes, MetalFX image comparisons, HDR and production server integration are still unverified.
 
 ## Proposed implementation
 
-Planning refresh: 2026-09-06 against Swiftfin `348fc2fd`. This includes the new media-segment/intro-skip support and Catalyst framework-layout repair. Neither changes the requirement for a separate macOS application. No native app or native dependency build was produced during this planning pass.
+Planning baseline: 2026-09-06 against Swiftfin `348fc2fd`. This includes the new media-segment/intro-skip support and Catalyst framework-layout repair. Neither changes the requirement for a separate macOS application. Implementation evidence is recorded above.
 
 ### First prerequisite: native playback binaries
 

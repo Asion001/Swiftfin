@@ -1,6 +1,8 @@
 # Shared media-provider implementation contract
 
-Status: proposed, 2026-09-06. No interfaces below have been implemented yet. This is the first shared-code batch for the [native Mac port](native-macos-plan.md) and [Silo integration](silo-native-integration-plan.md).
+Status: foundation implemented, 2026-09-06. `Shared/Services/MediaServers` now provides provider/account/profile identity, credential/cache namespaces, validated timeline and seek policy, engine plan/track/resource values, and playback generation/stop ownership. The root Swift package tests these exact app sources independently of Apple UI and either server SDK. The service interfaces and adapters below remain planned. This is shared work for the [native Mac port](native-macos-plan.md) and [Silo integration](silo-native-integration-plan.md).
+
+Run `swift test` for the contract suite. CI also type-checks the sources against iOS and tvOS SDKs. Current tests cover identity separation, legacy provider decoding, opaque IDs, timeline mapping, seek windows, invalid values and stale callbacks/duplicate stop ownership. These values are not yet connected to production authentication or playback; existing credentials and stored records have not been migrated. Catalog DTOs, transport fixtures, refresh coordination and both provider adapters are still to be implemented.
 
 ## Module boundary
 
