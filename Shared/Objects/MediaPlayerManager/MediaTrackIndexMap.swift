@@ -36,7 +36,10 @@ struct MediaTrackIndexMap {
     /// but finalized later by `resolvingPlaybackChildren` once the player reports its actual track list.
     ///
     ///  - `Transcode`: The HLS container has exactly 1 video (index 0) and 1 audio (index 1).
-    ///  - `DirectPlay`: Jellyfin lists external tracks first, offsetting all internal container indexes by that count.
+    ///  - `DirectPlay`: an external track listed before an internal one shifts that internal track's container position
+    ///    down by one. Only externals that actually precede a track are subtracted: servers append sidecar subtitles
+    ///    after the container's own streams, and subtracting those too pushed the audio track to a negative index,
+    ///    which every player reads as "no audio".
     static func build(
         from mediaStreams: [MediaStream],
         for playMethod: PlayMethod,
@@ -71,13 +74,18 @@ struct MediaTrackIndexMap {
                 indexMap.setPlayerIndex(playerIndex, for: oldIndex)
             }
         } else {
-            let externalCount = mediaStreams.count(where: { $0.isExternal == true })
-            let internalTracks = mediaStreams.filter { $0.isExternal == false }
+            var precedingExternalCount = 0
 
-            for track in internalTracks {
+            for track in mediaStreams {
+                guard track.isExternal == false else {
+                    if track.isExternal == true {
+                        precedingExternalCount += 1
+                    }
+                    continue
+                }
+
                 guard let oldIndex = track.index else { continue }
-                let playerIndex = oldIndex - externalCount
-                indexMap.setPlayerIndex(playerIndex, for: oldIndex)
+                indexMap.setPlayerIndex(oldIndex - precedingExternalCount, for: oldIndex)
             }
         }
 
