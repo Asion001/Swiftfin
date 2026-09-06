@@ -34,7 +34,7 @@ Proposed shared modules:
 
 Use capability groups rather than one enormous protocol: authentication, catalog, playback, personal state, downloads, realtime, and administration. Account/provider changes cancel outstanding requests and close the previous session's subscriptions before publishing new data.
 
-Persist `ServerProviderKind` (`jellyfin` / `silo`), a local connection UUID, canonical base URL, remote server identity when available, account ID, and optional profile ID. Existing records without a provider decode as Jellyfin. Keep remote IDs opaque and namespace database rows, artwork caches, downloads, settings, and credentials by provider + connection + account/profile. Matching titles or numeric IDs must never merge libraries or watch history across servers.
+Persist `ServerProviderKind` (`jellyfin` / `silo`), a stable local server-record UUID, its endpoint records/base URLs, remote server identity when available, account ID, and optional profile ID. Existing records without a provider decode as Jellyfin. Keep remote IDs opaque and namespace database rows, artwork caches, downloads, settings, and credentials by provider + server record + account/profile. Switching between LAN and public endpoints for the same server must not create a new account namespace. Matching titles or numeric IDs must never merge libraries or watch history across servers. The [shared provider contract](media-provider-contract.md) defines migration, ownership and test cases.
 
 ## Native API coverage
 
@@ -77,6 +77,8 @@ Do not carry Silo server setup or infrastructure changes into this client task. 
 ## Delivery sequence and acceptance gates
 
 The native Mac direction is now confirmed: separate AppKit/SwiftUI application. Start the shared provider contracts before creating Mac-specific networking code. The native MPVKit artifacts are a separate prerequisite for Mac playback, not a reason to delay Silo's contract/fixture tests or change its protocol.
+
+The 2026-09-06 Swiftfin refresh includes native Jellyfin media-segment/intro-skip rules. Preserve those in the shared marker policy and adapt Silo markers into the same source-time model. Silo seeks still follow the plan's local-seek/reanchor policy; a skip action must not bypass that distinction.
 
 The first implementation batch should add a platform-independent `Shared/Services/MediaServers` boundary with provider-scoped identity, capabilities, catalog queries, media metadata, playback plans and progress reporting. Keep Jellyfin DTO conversion inside its adapter; UI and engine contracts should use the shared domain types. Compile these types in both existing clients and the future native target. Test legacy connection decoding, ID collisions across providers/profiles, source/player clock conversion and cancellation of stale session results before adding the Silo login UI.
 
