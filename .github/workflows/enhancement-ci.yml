@@ -31,23 +31,6 @@ jobs:
       - name: Install pinned SwiftFormat
         run: bash Scripts/install_ci_swiftformat.sh
 
-      - name: Cache Carthage
-        uses: actions/cache@v4
-        id: carthage-cache
-        with:
-          path: Carthage
-          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
-          restore-keys: ${{ runner.os }}-carthage-
-
-      - name: Build Carthage dependencies
-        if: steps.carthage-cache.outputs.cache-hit != 'true'
-        uses: nick-fields/retry@v2
-        with:
-          max_attempts: 4
-          retry_wait_seconds: 10
-          timeout_minutes: 20
-          command: carthage update --use-xcframeworks --cache-builds
-
       # validate-pr.yaml only runs these on pull_request, but this fork commits
       # straight to main, so on the normal workflow they never ran at all.
       - name: Lint

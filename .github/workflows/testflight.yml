@@ -119,9 +119,6 @@ jobs:
       - name: Install pinned SwiftFormat
         run: bash Scripts/install_ci_swiftformat.sh
 
-      - name: Update Carthage
-        run: carthage update --use-xcframeworks --cache-builds
-
       - name: Install certificate and provisioning profile
         run: |
           set -euo pipefail

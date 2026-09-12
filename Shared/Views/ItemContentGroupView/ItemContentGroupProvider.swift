@@ -242,7 +242,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
             )
         }
 
-        if let castAndCrew = item.people, castAndCrew.isNotEmpty {
+        if let castAndCrew = item.mergedPeople, castAndCrew.isNotEmpty {
             PosterGroup(
                 id: "cast-and-crew",
                 library: StaticLibrary(

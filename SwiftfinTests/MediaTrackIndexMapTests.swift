@@ -30,78 +30,139 @@ final class MediaTrackIndexMapTests: XCTestCase {
         )
     }
 
-    // MARK: - Direct play
+    private func track(
+        _ id: Int64,
+        _ kind: MPVTrack.Kind,
+        ffIndex: Int?,
+        external: Bool = false,
+        title: String = ""
+    ) -> MPVTrack {
+        MPVTrack(
+            id: id,
+            ffIndex: ffIndex,
+            kind: kind,
+            title: title,
+            language: nil,
+            codec: nil,
+            isExternal: external,
+            isSelected: false
+        )
+    }
 
     /// The layout that muted playback: one video, one audio, four embedded
-    /// subtitles and four sidecar subtitles listed after them. Subtracting all
-    /// four sidecars from every internal track put audio at -3, which MPV reads
-    /// as `aid=no`.
-    func testDirectPlayKeepsAudioIndexWhenSidecarSubtitlesAreListedLast() {
-        let streams: [MediaStream] = [
+    /// subtitles and four sidecar subtitles listed after them.
+    private var sidecarsListedLast: [MediaStream] {
+        [
             stream(0, .video),
             stream(1, .audio),
             stream(2, .subtitle),
             stream(3, .subtitle),
             stream(4, .subtitle),
             stream(5, .subtitle),
-            stream(6, .subtitle, external: true),
-            stream(7, .subtitle, external: true),
-            stream(8, .subtitle, external: true),
-            stream(9, .subtitle, external: true),
+            sidecar(6),
+            sidecar(7),
+            sidecar(8),
+            sidecar(9),
         ]
-
-        let map = MediaTrackIndexMap.build(from: streams, for: .directPlay, selectedAudioStreamIndex: 1)
-
-        XCTAssertEqual(map.playerIndex(for: 1), 1)
-        XCTAssertEqual(map.playerIndex(for: 0), 0)
-        XCTAssertEqual(map.playerIndex(for: 5), 5)
     }
 
-    /// The case the offset exists for: a server that lists sidecars first still
-    /// has to shift the container's own streams down past them.
-    func testDirectPlayShiftsInternalTracksPastSidecarSubtitlesListedFirst() {
-        let streams: [MediaStream] = [
-            stream(0, .subtitle, external: true),
-            stream(1, .subtitle, external: true),
-            stream(2, .video),
-            stream(3, .audio),
-            stream(4, .subtitle),
-        ]
+    // MARK: - Shared map
 
-        let map = MediaTrackIndexMap.build(from: streams, for: .directPlay, selectedAudioStreamIndex: 3)
+    /// Sidecars listed after the container's streams once pushed audio to a
+    /// negative index, which every player reads as "no audio".
+    func testSidecarSubtitlesListedLastLeaveAudioOnTheFirstTrack() {
+        let map = MediaTrackIndexMap.build(from: sidecarsListedLast, for: .directPlay, selectedAudioStreamIndex: 1)
 
-        XCTAssertEqual(map.playerIndex(for: 2), 0)
-        XCTAssertEqual(map.playerIndex(for: 3), 1)
-        XCTAssertEqual(map.playerIndex(for: 4), 2)
-    }
-
-    func testDirectPlayNeverMapsATrackToANegativeIndex() {
-        let streams: [MediaStream] = [
-            stream(0, .video),
-            stream(1, .audio),
-        ] + (2 ... 7).map { stream($0, .subtitle, external: true) }
-
-        let map = MediaTrackIndexMap.build(from: streams, for: .directPlay, selectedAudioStreamIndex: 1)
-
-        for index in 0 ... 7 {
+        XCTAssertEqual(map.playerIndex(for: 1), 0)
+        for index in 0 ... 9 {
             XCTAssertGreaterThanOrEqual(map.playerIndex(for: index) ?? 0, 0)
         }
     }
 
-    // MARK: - Transcode
+    // MARK: - MPVKit map
 
-    func testTranscodeMapsSelectedAudioToTheSecondHLSTrack() {
+    func testMPVKitPredictsOneBasedTrackIDsBeforeMPVReportsTracks() {
+        let map = MediaTrackIndexMap.mpvKit(
+            mediaStreams: sidecarsListedLast,
+            tracks: nil,
+            isTranscoding: false,
+            selectedAudioStreamIndex: 1
+        )
+
+        XCTAssertEqual(map.playerIndex(for: 1), 1)
+        XCTAssertEqual(map.playerIndex(for: 2), 1)
+        XCTAssertEqual(map.playerIndex(for: 5), 4)
+        /// Unknown until MPV has loaded it, so subtitles stay off rather than
+        /// landing on the wrong track.
+        XCTAssertNil(map.playerIndex(for: 6))
+    }
+
+    /// Jellyfin numbers embedded streams by container position, attachments
+    /// included, so its indexes can skip numbers that MPV's `ff-index` also skips.
+    func testMPVKitMatchesEmbeddedStreamsByFFIndexAcrossAttachmentGaps() {
+        let streams: [MediaStream] = [
+            stream(0, .video),
+            stream(1, .audio),
+            stream(2, .subtitle),
+            stream(4, .subtitle),
+            stream(6, .subtitle),
+        ]
+        let tracks: [MPVTrack] = [
+            track(1, .video, ffIndex: 0),
+            track(1, .audio, ffIndex: 1),
+            track(1, .subtitle, ffIndex: 2),
+            track(2, .subtitle, ffIndex: 4),
+            track(3, .subtitle, ffIndex: 6),
+        ]
+
+        let map = MediaTrackIndexMap.mpvKit(mediaStreams: streams, tracks: tracks, isTranscoding: false, selectedAudioStreamIndex: 1)
+
+        XCTAssertEqual(map.playerIndex(for: 1), 1)
+        XCTAssertEqual(map.playerIndex(for: 4), 2)
+        XCTAssertEqual(map.playerIndex(for: 6), 3)
+    }
+
+    func testMPVKitFindsSidecarsByTheTitleTheyWereAddedUnder() {
+        let tracks: [MPVTrack] = [
+            track(1, .audio, ffIndex: 1),
+            track(1, .subtitle, ffIndex: 2),
+            track(2, .subtitle, ffIndex: 3),
+            track(3, .subtitle, ffIndex: 4),
+            track(4, .subtitle, ffIndex: 5),
+            /// Sidecars finishing out of order must not swap.
+            track(5, .subtitle, ffIndex: 0, external: true, title: MediaTrackIndexMap.mpvKitSidecarTitle(for: 7)),
+            track(6, .subtitle, ffIndex: 0, external: true, title: MediaTrackIndexMap.mpvKitSidecarTitle(for: 6)),
+        ]
+
+        let map = MediaTrackIndexMap.mpvKit(
+            mediaStreams: sidecarsListedLast,
+            tracks: tracks,
+            isTranscoding: false,
+            selectedAudioStreamIndex: 1
+        )
+
+        XCTAssertEqual(map.playerIndex(for: 6), 6)
+        XCTAssertEqual(map.playerIndex(for: 7), 5)
+        XCTAssertNil(map.playerIndex(for: 8))
+    }
+
+    func testMPVKitMapsTheTranscodedAudioToTheOnlyHLSAudioTrack() {
         let streams: [MediaStream] = [
             stream(0, .video),
             stream(1, .audio),
             stream(2, .audio),
-            sidecar(3),
         ]
 
-        let map = MediaTrackIndexMap.build(from: streams, for: .transcode, selectedAudioStreamIndex: 2)
+        let predicted = MediaTrackIndexMap.mpvKit(mediaStreams: streams, tracks: nil, isTranscoding: true, selectedAudioStreamIndex: 2)
+        XCTAssertEqual(predicted.playerIndex(for: 2), 1)
+        XCTAssertNil(predicted.playerIndex(for: 1))
 
-        XCTAssertEqual(map.playerIndex(for: 0), 0)
-        XCTAssertEqual(map.playerIndex(for: 2), 1)
-        XCTAssertEqual(map.playerIndex(for: 3), 2)
+        let loaded = MediaTrackIndexMap.mpvKit(
+            mediaStreams: streams,
+            tracks: [track(1, .video, ffIndex: 0), track(1, .audio, ffIndex: 1)],
+            isTranscoding: true,
+            selectedAudioStreamIndex: 2
+        )
+        XCTAssertEqual(loaded.playerIndex(for: 2), 1)
     }
 }

@@ -22,7 +22,6 @@ struct SettingsView: View {
 
     @Default(.userAccentColor)
     private var accentColor
-
     @Default(.VideoPlayer.videoPlayerType)
     private var videoPlayerType
 
@@ -128,39 +127,20 @@ struct SettingsView: View {
 
     // MARK: - Video Player Section
 
+    /// Asion001/Swiftfin: upstream moved these under Customize > Advanced;
+    /// the fork keeps them one tap away because of the MPV settings.
     @ViewBuilder
     private var videoPlayerSection: some View {
         Section(L10n.videoPlayer) {
             #if os(iOS)
-            Picker(L10n.videoPlayerType, selection: $videoPlayerType, onlySupported: true)
+            Picker(L10n.player, selection: $videoPlayerType, onlySupported: true)
             #else
-            ListRowMenu(L10n.videoPlayerType, selection: $videoPlayerType)
+            ListRowMenu(L10n.player, selection: $videoPlayerType)
             #endif
 
             ChevronButton(L10n.videoPlayer) {
                 router.route(to: .videoPlayerSettings)
             }
-
-            ChevronButton(L10n.playbackQuality) {
-                router.route(to: .playbackQualitySettings)
-            }
-        } learnMore: {
-            #if !targetEnvironment(macCatalyst)
-            LabeledContent(
-                L10n.swiftfin,
-                value: L10n.playerSwiftfinDescription
-            )
-            #endif
-            LabeledContent(
-                L10n.native,
-                value: L10n.playerNativeDescription
-            )
-            #if os(iOS)
-            LabeledContent(
-                VideoEnhancementStrings.title,
-                value: VideoEnhancementStrings.mpvPlayerDescription
-            )
-            #endif
         }
     }
 

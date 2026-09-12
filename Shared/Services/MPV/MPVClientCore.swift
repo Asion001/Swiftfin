@@ -107,7 +107,7 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
 
     private struct DesiredTrack {
         let kind: MPVTrack.Kind
-        let ffIndex: Int?
+        let id: Int?
     }
 
     private let configurationStore: MPVConfigurationStore
@@ -303,10 +303,12 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         }
     }
 
-    func selectTrack(kind: MPVTrack.Kind, ffIndex: Int?) {
+    /// Selects the track MPV knows by `id`, the per-type number in its
+    /// `track-list`, once that track exists. A negative `id` turns the kind off.
+    func selectTrack(kind: MPVTrack.Kind, id: Int?) {
         queue.async { [weak self] in
             guard let self else { return }
-            desiredTracks[kind] = DesiredTrack(kind: kind, ffIndex: ffIndex)
+            desiredTracks[kind] = DesiredTrack(kind: kind, id: id)
             applyDesiredTrack(kind: kind)
         }
     }
@@ -870,9 +872,9 @@ private extension MPVClientCore {
         /// A missing index means Swiftfin could not map the track, not that the
         /// track should be off: turning `aid` off there left the video playing
         /// silently. MPV's own default selection is the better answer.
-        guard let ffIndex = desired.ffIndex else { return }
+        guard let id = desired.id else { return }
 
-        guard ffIndex >= 0 else {
+        guard id >= 0 else {
             reportIfFailed(
                 mpv_set_property_string(handle, property, "no"),
                 operation: "disable \(kind.rawValue) track"
@@ -881,9 +883,7 @@ private extension MPVClientCore {
         }
 
         guard let track = tracks.first(where: {
-            $0.kind == desired.kind && $0.ffIndex == ffIndex
-        }) ?? tracks.first(where: {
-            $0.kind == desired.kind && $0.id == Int64(ffIndex)
+            $0.kind == desired.kind && $0.id == Int64(id)
         }) else { return }
 
         reportIfFailed(

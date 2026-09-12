@@ -23,8 +23,8 @@ extension VideoPlayerType {
         case .native:
             Self._nativeCodecProfiles
         #if !targetEnvironment(macCatalyst)
-        case .swiftfin:
-            Self._swiftfinCodecProfiles
+        case .vlc:
+            Self._vlcCodecProfiles
         #endif
         }
     }

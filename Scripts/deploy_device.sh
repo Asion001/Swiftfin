@@ -148,9 +148,6 @@ if [ "$device_state" != "connected" ]; then
         "$device_name" "$device_state" >&2
 fi
 
-[ -d "$repository_root/Carthage/Build" ] || fail \
-    "Carthage dependencies are missing; run: brew bundle --file Brewfile && carthage update --use-xcframeworks"
-
 # Signing is the one thing this cannot supply for you, and Xcode reports its
 # absence as a generic build failure a long way from the cause.
 team_file="$repository_root/XcodeConfig/DevelopmentTeam.xcconfig"

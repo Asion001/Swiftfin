@@ -95,7 +95,6 @@
 "mpv.stats.unavailable" = "MPV is not the active player.";
 "mpv.stats.upscaler" = "Upscaler";
 "mpv.stats.video-codec" = "Video codec";
-"player.mpv" = "MPV";
 "sleep-timer.add-fifteen" = "Add 15 minutes";
 "sleep-timer.background-explanation" = "The timer uses the actual clock, continues during background audio and buffering, and pauses playback when it finishes.";
 "sleep-timer.cancel" = "Cancel timer";

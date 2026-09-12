@@ -7,6 +7,7 @@
 //
 
 import Combine
+import Defaults
 import FactoryKit
 import SwiftUI
 import Transmission
@@ -59,11 +60,23 @@ struct VideoPlayer: View {
     }
 
     init(proxy: (any VideoMediaPlayerProxy)? = nil) {
-        #if targetEnvironment(macCatalyst)
-        self._proxy = .init(wrappedValue: proxy ?? AVMediaPlayerProxy())
-        #else
-        self._proxy = .init(wrappedValue: proxy ?? VLCMediaPlayerProxy())
+        self._proxy = .init(wrappedValue: proxy ?? Self.makeProxy())
+    }
+
+    private static func makeProxy() -> any VideoMediaPlayerProxy {
+        switch Defaults[.VideoPlayer.videoPlayerType] {
+        #if os(iOS)
+        case .mpv:
+            MPVMediaPlayerProxy()
         #endif
+        #if targetEnvironment(macCatalyst)
+        case .native:
+            AVMediaPlayerProxy()
+        #else
+        case .native, .vlc:
+            VLCMediaPlayerProxy()
+        #endif
+        }
     }
 
     var body: some View {

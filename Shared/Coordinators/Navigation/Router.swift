@@ -14,10 +14,7 @@ extension NavigationCoordinator {
     struct Router {
 
         let navigationCoordinator: NavigationCoordinator?
-
-        var isRootOfPath: Bool {
-            navigationCoordinator?.path.isEmpty ?? false
-        }
+        let isRootOfPath: Bool
 
         func route(
             to route: NavigationRoute,
@@ -101,6 +98,7 @@ extension EnvironmentValues {
 
     @Entry
     var router: NavigationCoordinator.Router = .init(
-        navigationCoordinator: nil
+        navigationCoordinator: nil,
+        isRootOfPath: false
     )
 }

@@ -12,20 +12,22 @@ import XCTest
 
 final class NavigationTests: XCTestCase {
 
+    /// The root view keeps its root styling while something is pushed over it,
+    /// and a pushed view never takes it, whatever the path holds at the time.
     @MainActor
-    func testRouterRootStateTracksCoordinatorInsteadOfCachingFirstValue() {
+    func testRouterRootStateDoesNotFollowThePath() {
         let coordinator = NavigationCoordinator()
-        let router = NavigationCoordinator.Router(
-            navigationCoordinator: coordinator
-        )
-
-        XCTAssertTrue(router.isRootOfPath)
+        let root = NavigationCoordinator.Router(navigationCoordinator: coordinator, isRootOfPath: true)
+        let pushed = NavigationCoordinator.Router(navigationCoordinator: coordinator, isRootOfPath: false)
 
         coordinator.path.append(NavigationRoute(id: "test") { EmptyView() })
 
-        XCTAssertFalse(router.isRootOfPath)
+        XCTAssertTrue(root.isRootOfPath)
+        XCTAssertFalse(pushed.isRootOfPath)
 
         coordinator.path.removeAll()
-        XCTAssertTrue(router.isRootOfPath)
+
+        XCTAssertTrue(root.isRootOfPath)
+        XCTAssertFalse(pushed.isRootOfPath)
     }
 }

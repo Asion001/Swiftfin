@@ -6,33 +6,28 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import JellyfinAPI
 
-// TODO: remove, change to VLC, AVPlayer
-
-enum VideoPlayerType: String, CaseIterable, Displayable, Storable, SupportedCaseIterable {
+/// `.mpv` is this fork's MPVKit player. Upstream's MPVUI player cannot share a
+/// package graph with MPVKit, so it is not built and tvOS has no MPV player.
+enum VideoPlayerType: String, CaseIterable, Displayable, SupportedCaseIterable, Storable {
 
     #if os(iOS)
     case mpv
     #endif
     case native
     #if !targetEnvironment(macCatalyst)
-    case swiftfin
+    case vlc
     #endif
 
     /// The raw value stored before the AVPlayer-backed "Enhanced" player was
     /// replaced by MPV. Decoding it as `.mpv` keeps existing selections intact.
     private static let legacyEnhancedRawValue = "enhanced"
 
-    static var supportedCases: [VideoPlayerType] {
-        #if os(iOS) && targetEnvironment(simulator)
-        /// MoltenVK has no usable Metal path in the simulator, so MPV cannot
-        /// present there.
-        allCases.filter { $0 != .mpv }
-        #else
-        allCases
-        #endif
-    }
+    /// The raw value stored before upstream renamed the VLC-backed player from
+    /// "Swiftfin" to "VLC".
+    private static let legacySwiftfinRawValue = "swiftfin"
 
     init(from decoder: any Decoder) throws {
         let rawValue = try decoder.singleValueContainer().decode(String.self)
@@ -40,6 +35,13 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable, SupportedCase
         #if os(iOS)
         if rawValue == Self.legacyEnhancedRawValue {
             self = .mpv
+            return
+        }
+        #endif
+
+        #if !targetEnvironment(macCatalyst)
+        if rawValue == Self.legacySwiftfinRawValue {
+            self = .vlc
             return
         }
         #endif
@@ -56,18 +58,17 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable, SupportedCase
         self = value
     }
 
-    // swiftlint:disable:next hard_coded_display_string - "MPV" is a product name
     var displayTitle: String {
         switch self {
         #if os(iOS)
         case .mpv:
-            String(enhancedLocalized: "player.mpv", defaultValue: "MPV")
+            L10n.mpv
         #endif
         case .native:
             L10n.native
         #if !targetEnvironment(macCatalyst)
-        case .swiftfin:
-            L10n.swiftfin
+        case .vlc:
+            L10n.vlc
         #endif
         }
     }
@@ -81,8 +82,8 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable, SupportedCase
         case .native:
             Self._nativeDirectPlayProfiles
         #if !targetEnvironment(macCatalyst)
-        case .swiftfin:
-            Self._swiftfinDirectPlayProfiles
+        case .vlc:
+            Self._vlcDirectPlayProfiles
         #endif
         }
     }
@@ -91,13 +92,13 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable, SupportedCase
         switch self {
         #if os(iOS)
         case .mpv:
-            Self._swiftfinTranscodingProfiles
+            Self._vlcTranscodingProfiles
         #endif
         case .native:
             Self._nativeTranscodingProfiles
         #if !targetEnvironment(macCatalyst)
-        case .swiftfin:
-            Self._swiftfinTranscodingProfiles
+        case .vlc:
+            Self._vlcTranscodingProfiles
         #endif
         }
     }
@@ -111,9 +112,19 @@ enum VideoPlayerType: String, CaseIterable, Displayable, Storable, SupportedCase
         case .native:
             Self._nativeSubtitleProfiles
         #if !targetEnvironment(macCatalyst)
-        case .swiftfin:
-            Self._swiftfinSubtitleProfiles
+        case .vlc:
+            Self._vlcSubtitleProfiles
         #endif
         }
+    }
+
+    static var supportedCases: [VideoPlayerType] {
+        #if os(iOS) && targetEnvironment(simulator)
+        /// MoltenVK has no usable Metal path in the simulator, so MPV cannot
+        /// present there.
+        allCases.filter { $0 != .mpv }
+        #else
+        allCases
+        #endif
     }
 }

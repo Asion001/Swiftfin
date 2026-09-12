@@ -19,9 +19,12 @@ struct VideoPlayerSettingsView: View {
     typealias PlatformPicker = Picker
     #endif
 
-    #if os(iOS)
+    // MARK: - Player Defaults
+
     @Default(.VideoPlayer.videoPlayerType)
     private var videoPlayerType
+
+    #if os(iOS)
     @Default(.VideoPlayer.enhancementProvider)
     private var enhancementProvider
     @Default(.VideoPlayer.enhancementMode)
@@ -111,6 +114,8 @@ struct VideoPlayerSettingsView: View {
 
     var body: some View {
         Form(systemImage: "tv") {
+            engineSettings
+
             #if os(iOS)
             enhancementSettings
             #endif
@@ -147,6 +152,51 @@ struct VideoPlayerSettingsView: View {
         }
     }
 
+    // MARK: - Engine Settings
+
+    @ViewBuilder
+    private var videoPlayerPicker: some View {
+        Picker(L10n.player, selection: $videoPlayerType) {
+            ForEach(VideoPlayerType.supportedCases, id: \.self) { player in
+                Text(player.displayTitle).tag(player)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var engineSettings: some View {
+        Section(L10n.playback) {
+            #if os(iOS)
+            videoPlayerPicker
+            #else
+            ListRowMenu(L10n.player, subtitle: videoPlayerType.displayTitle) {
+                videoPlayerPicker
+            }
+            #endif
+
+            ChevronButton(L10n.playbackQuality) {
+                router.route(to: .playbackQualitySettings)
+            }
+        } learnMore: {
+            #if !targetEnvironment(macCatalyst)
+            LabeledContent(
+                L10n.vlc,
+                value: L10n.playerVlcDescription
+            )
+            #endif
+            LabeledContent(
+                L10n.native,
+                value: L10n.playerNativeDescription
+            )
+            #if os(iOS)
+            LabeledContent(
+                L10n.mpv,
+                value: VideoEnhancementStrings.mpvPlayerDescription
+            )
+            #endif
+        }
+    }
+
     #if os(iOS)
     private var enhancementFooter: String {
         [
@@ -160,8 +210,6 @@ struct VideoPlayerSettingsView: View {
     @ViewBuilder
     private var enhancementSettings: some View {
         Section {
-            Picker(L10n.videoPlayerType, selection: $videoPlayerType, onlySupported: true)
-
             Picker(VideoEnhancementStrings.upscaler, selection: $enhancementProvider) {
                 ForEach(VideoEnhancementProvider.supportedCases, id: \.rawValue) { provider in
                     Text(provider.displayTitle)

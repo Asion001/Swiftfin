@@ -140,7 +140,7 @@ extension MediaPlayerItem {
         playbackInfo.audioStreamIndex = audioStreamIndex
         playbackInfo.subtitleStreamIndex = subtitleStreamIndex
 
-        if !item.isLiveStream {
+        if !item.isLiveStream, initialMediaSource.type != .placeholder {
             playbackInfo.mediaSourceID = initialMediaSource.id
         }
 
@@ -243,7 +243,6 @@ extension MediaPlayerItem {
     }
 
     // TODO: audio type stream
-    // TODO: build live tv stream from Paths.getLiveHlsStream?
     private static func streamURL(
         item: BaseItemDto,
         mediaSource: MediaSourceInfo,
@@ -266,7 +265,7 @@ extension MediaPlayerItem {
             return url
         }
 
-        if item.mediaType == .video, !item.isLiveStream {
+        if item.mediaType == .video {
 
             logger.trace("Making video stream URL for item \(itemID)")
 
@@ -274,7 +273,8 @@ extension MediaPlayerItem {
                 isStatic: true,
                 tag: mediaSource.eTag ?? item.etag,
                 playSessionID: playSessionID,
-                mediaSourceID: mediaSource.id ?? itemID
+                mediaSourceID: mediaSource.id ?? itemID,
+                liveStreamID: mediaSource.liveStreamID
             )
 
             let videoStreamRequest = Paths.getVideoStream(

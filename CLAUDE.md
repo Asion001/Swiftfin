@@ -11,10 +11,10 @@ Swiftfin is a SwiftUI Jellyfin client targeting iOS 18+ / tvOS 26+ (plus Mac Cat
 ## Setup
 
 ```bash
-brew bundle --file Brewfile && carthage update --use-xcframeworks
+brew bundle --file Brewfile
 ```
 
-Carthage supplies MobileVLCKit/TVVLCKit (pinned in `Cartfile`); everything else is SPM. Builds fail without the Carthage step. Local signing goes in `XcodeConfig/DevelopmentTeam.xcconfig` (gitignored) — never commit a development team.
+All dependencies are SPM (upstream replaced Carthage's VLCKit with SwiftVLC). Local signing goes in `XcodeConfig/DevelopmentTeam.xcconfig` (gitignored) — never commit a development team.
 
 ## Build, test, lint
 
@@ -26,7 +26,7 @@ xcodebuild -quiet -skipMacroValidation -skipPackagePluginValidation -project Swi
 xcodebuild -quiet -skipMacroValidation -skipPackagePluginValidation -project Swiftfin.xcodeproj -scheme Swiftfin -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' CODE_SIGNING_ALLOWED=NO -only-testing:SwiftfinTests test
 ```
 
-Single test: append the identifier, e.g. `-only-testing:SwiftfinTests/VideoEnhancementTests/testRouterRootStateTracksCoordinatorInsteadOfCachingFirstValue`.
+Single test: append the identifier, e.g. `-only-testing:SwiftfinTests/NavigationTests/testRouterRootStateDoesNotFollowThePath`.
 
 Other schemes/destinations exercised by CI: `-scheme 'Swiftfin tvOS' -destination 'generic/platform=tvOS'`, and Mac Catalyst via `-destination 'generic/platform=macOS,variant=Mac Catalyst' CODE_SIGN_ENTITLEMENTS= ARCHS=arm64`.
 

@@ -26,9 +26,6 @@ extension EnvironmentValues {
     var isHighlighted: Bool = true
 
     @Entry
-    var isOverComplexContent: Bool = false
-
-    @Entry
     var isSelected: Bool = false
 
     /// Extra scroll clearance while the persistent music mini player is visible.

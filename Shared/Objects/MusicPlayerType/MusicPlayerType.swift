@@ -18,13 +18,12 @@ enum MusicPlayerType: String, CaseIterable, Displayable, Storable, SupportedCase
         allCases
     }
 
-    // swiftlint:disable:next hard_coded_display_string - "MPV" is a product name
     var displayTitle: String {
         switch self {
         case .native:
             L10n.native
         case .mpv:
-            String(localized: "player.mpv", defaultValue: "MPV")
+            L10n.mpv
         }
     }
 }

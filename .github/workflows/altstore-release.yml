@@ -44,23 +44,6 @@ jobs:
       - name: Install pinned SwiftFormat
         run: bash Scripts/install_ci_swiftformat.sh
 
-      - name: Cache Carthage
-        uses: actions/cache@v4
-        id: carthage-cache
-        with:
-          path: Carthage
-          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
-          restore-keys: ${{ runner.os }}-carthage-
-
-      - name: Build Carthage dependencies
-        if: steps.carthage-cache.outputs.cache-hit != 'true'
-        uses: nick-fields/retry@v2
-        with:
-          max_attempts: 4
-          retry_wait_seconds: 10
-          timeout_minutes: 20
-          command: carthage update --use-xcframeworks --cache-builds
-
       # validate-pr.yaml only runs these on pull_request, but this fork commits
       # straight to main, where they would otherwise never run.
       - name: Lint
@@ -105,23 +88,6 @@ jobs:
 
       - name: Install pinned SwiftFormat
         run: bash Scripts/install_ci_swiftformat.sh
-
-      - name: Cache Carthage
-        uses: actions/cache@v4
-        id: carthage-cache
-        with:
-          path: Carthage
-          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
-          restore-keys: ${{ runner.os }}-carthage-
-
-      - name: Build Carthage dependencies
-        if: steps.carthage-cache.outputs.cache-hit != 'true'
-        uses: nick-fields/retry@v2
-        with:
-          max_attempts: 4
-          retry_wait_seconds: 10
-          timeout_minutes: 20
-          command: carthage update --use-xcframeworks --cache-builds
 
       - name: Create release metadata
         id: metadata
@@ -264,23 +230,6 @@ jobs:
 
       - name: Install pinned SwiftFormat
         run: bash Scripts/install_ci_swiftformat.sh
-
-      - name: Cache Carthage
-        uses: actions/cache@v4
-        id: carthage-cache
-        with:
-          path: Carthage
-          key: ${{ runner.os }}-carthage-${{ hashFiles('Cartfile.resolved') }}
-          restore-keys: ${{ runner.os }}-carthage-
-
-      - name: Build Carthage dependencies
-        if: steps.carthage-cache.outputs.cache-hit != 'true'
-        uses: nick-fields/retry@v2
-        with:
-          max_attempts: 4
-          retry_wait_seconds: 10
-          timeout_minutes: 20
-          command: carthage update --use-xcframeworks --cache-builds
 
       # Resolved separately so the Catalyst slices can be repaired before the
       # build embeds them; see the script for what is wrong with them.

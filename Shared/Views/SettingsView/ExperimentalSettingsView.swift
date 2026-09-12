@@ -15,6 +15,8 @@ struct ExperimentalSettingsView: View {
 
     static let isEnabled = true
 
+    @Default(.Experimental.mpvPlayer)
+    private var isMPVEnabled
     @Default(.Experimental.serverConnectionAutoSwitch)
     private var isServerConnectionAutoSwitchEnabled
     @Default(.Experimental.videoPlayerEPG)
@@ -26,6 +28,11 @@ struct ExperimentalSettingsView: View {
     var body: some View {
         Form(systemImage: "flask") {
             // swiftlint:disable hard_coded_display_string
+            // Asion001/Swiftfin: MPV is a regular player here; upstream's experimental MPVUI engine is not built.
+            #if canImport(MPVUI)
+            Toggle("MPV engine", isOn: $isMPVEnabled)
+            #endif
+
             Toggle("Live TV EPG", isOn: $isVideoPlayerEPGEnabled)
 
             #if os(iOS)
@@ -34,10 +41,17 @@ struct ExperimentalSettingsView: View {
 
             // swiftlint:enable hard_coded_display_string
         }
-        .onChange(of: isServerConnectionAutoSwitchEnabled) {
-            if isServerConnectionAutoSwitchEnabled {
-                userSessionManager.scheduleServerConnectionResolution()
+        #if canImport(MPVUI)
+        .onChange(of: isMPVEnabled) {
+                if !isMPVEnabled {
+                    Defaults[.VideoPlayer.videoPlayerType] = .vlc
+                }
             }
+        #endif
+            .onChange(of: isServerConnectionAutoSwitchEnabled) {
+                if isServerConnectionAutoSwitchEnabled {
+                    userSessionManager.scheduleServerConnectionResolution()
+                }
         }
         .navigationTitle(L10n.experimental)
     }

@@ -51,23 +51,6 @@ jobs:
       - name: Install pinned SwiftFormat
         run: bash Scripts/install_ci_swiftformat.sh
 
-      - name: Cache Carthage
-        uses: actions/cache@v4
-        id: carthage-cache
-        with:
-          path: Carthage
-          key: ${{ runner.os }}-carthage-${{ hashFiles('**/Cartfile.resolved') }}
-          restore-keys: ${{ runner.os }}-carthage-
-
-      - name: Update Carthage
-        if: steps.carthage-cache.outputs.cache-hit != 'true'
-        uses: nick-fields/retry@v2
-        with:
-          max_attempts: 4
-          retry_wait_seconds: 10
-          timeout_minutes: 20
-          command: carthage update --use-xcframeworks --cache-builds
-
       # FIXME: caches would keep failed compiles?
 
       # - name: Cache Swift packages
