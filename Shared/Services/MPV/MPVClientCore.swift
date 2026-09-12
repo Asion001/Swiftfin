@@ -867,7 +867,12 @@ private extension MPVClientCore {
         guard let desired = desiredTracks[kind], let handle else { return }
         let property = kind == .audio ? "aid" : "sid"
 
-        guard let ffIndex = desired.ffIndex, ffIndex >= 0 else {
+        /// A missing index means Swiftfin could not map the track, not that the
+        /// track should be off: turning `aid` off there left the video playing
+        /// silently. MPV's own default selection is the better answer.
+        guard let ffIndex = desired.ffIndex else { return }
+
+        guard ffIndex >= 0 else {
             reportIfFailed(
                 mpv_set_property_string(handle, property, "no"),
                 operation: "disable \(kind.rawValue) track"
