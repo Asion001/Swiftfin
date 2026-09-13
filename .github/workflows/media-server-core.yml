@@ -4,12 +4,18 @@ on:
   push:
     paths:
       - 'Shared/Services/MediaServers/**'
+      - 'Shared/Services/MediaServerAdapters/**'
+      - 'NativeMac/SwiftfinNative/**'
+      - 'Tests/MediaServerAdapterTests/**'
       - 'Tests/MediaServerCoreTests/**'
       - 'Package.swift'
       - '.github/workflows/media-server-core.yml'
   pull_request:
     paths:
       - 'Shared/Services/MediaServers/**'
+      - 'Shared/Services/MediaServerAdapters/**'
+      - 'NativeMac/SwiftfinNative/**'
+      - 'Tests/MediaServerAdapterTests/**'
       - 'Tests/MediaServerCoreTests/**'
       - 'Package.swift'
       - '.github/workflows/media-server-core.yml'
@@ -32,6 +38,6 @@ jobs:
       - name: Compile for iOS and tvOS
         run: |
           xcrun swiftc -typecheck -swift-version 6 -target arm64-apple-ios16.0 \
-            -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" Shared/Services/MediaServers/*.swift
+            -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" Shared/Services/MediaServers/*.swift Shared/Services/MediaServerAdapters/*.swift
           xcrun swiftc -typecheck -swift-version 6 -target arm64-apple-tvos16.0 \
-            -sdk "$(xcrun --sdk appletvos --show-sdk-path)" Shared/Services/MediaServers/*.swift
+            -sdk "$(xcrun --sdk appletvos --show-sdk-path)" Shared/Services/MediaServers/*.swift Shared/Services/MediaServerAdapters/*.swift

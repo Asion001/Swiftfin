@@ -2,6 +2,8 @@
 
 ## Current result
 
+2026-09-13 continuation: a separate SwiftUI native catalog preview now signs in to Jellyfin, browses/searches libraries and folders, displays authenticated artwork, and opens an optional detail inspector. Its arm64 release app is built by `Scripts/build_native_app.py`; see the [preview instructions](../NativeMac/SwiftfinNative/README.md) and [design direction](native-macos-design.md). The portable suite passes 21 tests. UI/protocol verification uses loopback fixtures, not a user's live server. Integrated playback, durable credentials, full Mac parity and Silo remain outstanding. Earlier milestone evidence follows.
+
 Audited on 2026-09-05. `Swiftfin.xcodeproj` has iOS, tvOS and test targets. The existing Mac application is built from the iOS target with Mac Catalyst. Its arm64 Debug build succeeded during this player-fix task. This is not a separate AppKit application.
 
 A production macOS target is not yet implemented. The user confirmed a separate native AppKit/SwiftUI application after finding the Catalyst build unsatisfactory. The implementation uses the macOS SDK and native Mac navigation, windows and controls.

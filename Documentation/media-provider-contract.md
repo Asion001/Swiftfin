@@ -1,10 +1,12 @@
 # Shared media-provider implementation contract
 
-Status: foundation implemented, 2026-09-06. `Shared/Services/MediaServers` now provides provider/account/profile identity, credential/cache namespaces, validated timeline and seek policy, engine plan/track/resource values, and playback generation/stop ownership. The root Swift package tests these exact app sources independently of Apple UI and either server SDK. The service interfaces and adapters below remain planned. This is shared work for the [native Mac port](native-macos-plan.md) and [Silo integration](silo-native-integration-plan.md).
+Status: foundation and first Jellyfin catalog path implemented, 2026-09-13. `Shared/Services/MediaServers` provides scoped identity, credential/cache namespaces, timeline/seek policy, playback values and ownership, and the `MediaCatalog` interface with catalog/artwork references. A separate Jellyfin adapter supplies native login, browsing, search, details and authenticated artwork to the Mac preview. This is shared work for the [native Mac port](native-macos-plan.md) and [Silo integration](silo-native-integration-plan.md).
 
-Run `swift test` for the contract suite. CI also type-checks the sources against iOS and tvOS SDKs. Current tests cover identity separation, legacy provider decoding, opaque IDs, timeline mapping, seek windows, invalid values and stale callbacks/duplicate stop ownership. These values are not yet connected to production authentication or playback; existing credentials and stored records have not been migrated. Catalog DTOs, transport fixtures, refresh coordination and both provider adapters are still to be implemented.
+Run `swift test` for the 21-test contract suite. CI also type-checks shared sources against iOS and tvOS SDKs. Tests cover identity separation, legacy provider decoding, opaque IDs, timelines, seek windows, stale callbacks, wire requests, pagination and scoped artwork caching. Native credentials remain in memory; existing iOS/Catalyst credentials and call paths are unchanged. Storage migration, refresh coordination, playback adapters and native Silo remain planned.
 
 ## Module boundary
+
+`Shared/Services/MediaServerAdapters` contains the Jellyfin wire DTOs and ephemeral HTTP transport. Keep this separate from the Foundation-only domain target.
 
 Begin under `Shared/Services/MediaServers` with Foundation/Codable/Sendable types. Keep UIKit, AppKit, SwiftUI, Defaults, CoreStore, JellyfinAPI and Silo wire DTOs out of the domain layer. Storage, transport and UI adapters depend on it. This allows host-side tests and an eventual package extraction without rewriting the new Mac client.
 
