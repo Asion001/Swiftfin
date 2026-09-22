@@ -55,6 +55,20 @@ jobs:
             -only-testing:SwiftfinTests \
             test
 
+      # MPVKit's Catalyst slices ship as shallow bundles, which Xcode refuses
+      # to embed; repair them the same way the release workflow does.
+      - name: Resolve Swift packages for Mac Catalyst
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Swiftfin.xcodeproj \
+            -scheme Swiftfin \
+            -derivedDataPath "$RUNNER_TEMP/SwiftfinMacDerivedData"
+
+      - name: Repair Mac Catalyst framework layout
+        run: |
+          bash Scripts/fix_catalyst_framework_layout.sh \
+            "$RUNNER_TEMP/SwiftfinMacDerivedData/SourcePackages/artifacts"
+
       - name: Build Mac Catalyst compatibility
         run: |
           xcodebuild -quiet \
@@ -63,6 +77,7 @@ jobs:
             -project Swiftfin.xcodeproj \
             -scheme Swiftfin \
             -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/SwiftfinMacDerivedData" \
             -destination 'generic/platform=macOS,variant=Mac Catalyst' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_ENTITLEMENTS= \
