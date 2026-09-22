@@ -1,10 +1,40 @@
 # Native Silo integration alongside Jellyfin
 
+## Implementation status — 2026-09-13
+
+The first native Silo adapter is implemented on `codex/native-client-foundation`:
+
+- `SiloAPIClient` discovers login providers, performs password login, keeps access/refresh tokens in memory, shares one refresh across concurrent unauthorized requests, and revokes the session on sign-out.
+- Account login and viewing profiles are separate. Profile selection uses the server's profile list; protected profiles require a successful PIN check **and** its `X-Profile-Token` proof. A switch invalidates the old viewing scope immediately. Late login, PIN, refresh and catalog replies cannot reactivate old sessions.
+- `SiloCatalogAdapter` loads profile-scoped libraries, queries `/catalog`, and reads item details. It preserves content IDs and unknown media kinds, converts runtime minutes to source seconds, and uses `has_more`, `total_exact` and the server snapshot for pagination. Cursors are bound to the viewing session, library and search.
+- Library records are separate from media items: a Silo library ID and content ID may have the same text. The initial Jellyfin `MediaCatalog` parent-item interface does not yet express this distinction or Silo season navigation; the Silo adapter uses an explicit library query instead of manufacturing Jellyfin folders.
+- The shared ephemeral HTTP transport rejects redirects. Credentials and PIN proofs stay in headers/bodies; no raw server error body is exposed by the adapter.
+
+Authentication, profiles and catalog were re-audited against Silo commit [`60b903e7d44b68c5a9630cbd10df9bb0513e43e0`](https://github.com/Silo-Server/silo-server/tree/60b903e7d44b68c5a9630cbd10df9bb0513e43e0). The older playback audit below retains its original source pin; it has not yet been refreshed to this revision.
+
+Validation: 36 Swift package tests passed, including 14 Silo contract/concurrency tests and one URLSession flow against the deterministic loopback fixture. The HTTP flow exercises incorrect and correct PINs, forced token renewal, Unicode content IDs, catalog details, remote logout and redirect rejection. These are synthetic, source-checked fixtures, **not** a running Silo server. Existing Jellyfin tests continue to pass. The shared sources also pass Swift 6 typechecking for iOS 16 and tvOS 16.
+
+Next implementation gates: playback v3 playable/terminal response decoding, shared library/navigation contracts, native account/profile UI, signed artwork delivery, seasons/episodes and durable Keychain credentials. Alternate login modes are discoverable but OAuth/device flows are not implemented. No Silo option is added to the production server picker yet, and no Silo playback or live-server acceptance is claimed.
+
+To run the local HTTP check, start the fixture in one terminal:
+
+```sh
+python3 Tests/Fixtures/silo_native_server.py --port 8781
+```
+
+Then run the suite in another:
+
+```sh
+SWIFTFIN_SILO_FIXTURE_URL=http://127.0.0.1:8781/silo swift test
+```
+
+Without the environment variable, the HTTP fixture test is explicitly skipped; the remaining contract tests still run. CI starts the fixture and runs the complete suite.
+
 ## Decision and evidence
 
 Add Silo as a first-class server provider using its native HTTP API. Keep Jellyfin as a fully supported provider with unchanged saved connections. Silo's Jellyfin compatibility listener can be tested separately, but is not the implementation of native Silo support.
 
-Source audit: 2026-09-05, Silo server commit [`3131494e52e069fc1ac10e1a31503c797d09f26e`](https://github.com/Silo-Server/silo-server/tree/3131494e52e069fc1ac10e1a31503c797d09f26e). Silo is pre-1.0; pin contract fixtures to this revision and refresh them deliberately. This is an implementation plan, not a completed integration or a claim of testing against a running Silo instance.
+Source audit: 2026-09-05, Silo server commit [`3131494e52e069fc1ac10e1a31503c797d09f26e`](https://github.com/Silo-Server/silo-server/tree/3131494e52e069fc1ac10e1a31503c797d09f26e). Silo is pre-1.0; this is the original planning/playback revision. The authentication/catalog implementation uses the newer pin documented above; refresh each contract deliberately. This is an implementation plan, not a completed integration or a claim of testing against a running Silo instance.
 
 Primary references:
 

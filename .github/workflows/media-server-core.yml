@@ -1,0 +1,56 @@
+name: Media server core
+
+on:
+  push:
+    paths:
+      - 'Shared/Services/MediaServers/**'
+      - 'Shared/Services/MediaServerAdapters/**'
+      - 'NativeMac/SwiftfinNative/**'
+      - 'Tests/MediaServerAdapterTests/**'
+      - 'Tests/Fixtures/silo_native_server.py'
+      - 'Tests/MediaServerCoreTests/**'
+      - 'Package.swift'
+      - '.github/workflows/media-server-core.yml'
+  pull_request:
+    paths:
+      - 'Shared/Services/MediaServers/**'
+      - 'Shared/Services/MediaServerAdapters/**'
+      - 'NativeMac/SwiftfinNative/**'
+      - 'Tests/MediaServerAdapterTests/**'
+      - 'Tests/Fixtures/silo_native_server.py'
+      - 'Tests/MediaServerCoreTests/**'
+      - 'Package.swift'
+      - '.github/workflows/media-server-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: media-server-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test provider contracts and native Silo HTTP flow
+        run: |
+          python3 Tests/Fixtures/silo_native_server.py --port 8781 > "$RUNNER_TEMP/silo-fixture.log" 2>&1 &
+          silo_fixture_pid=$!
+          trap 'kill "$silo_fixture_pid"' EXIT
+          for attempt in {1..50}; do
+            if curl --fail --silent http://127.0.0.1:8781/silo/api/v1/auth/providers > /dev/null; then
+              break
+            fi
+            sleep 0.1
+          done
+          curl --fail --silent http://127.0.0.1:8781/silo/api/v1/auth/providers > /dev/null
+          SWIFTFIN_SILO_FIXTURE_URL=http://127.0.0.1:8781/silo swift test
+      - name: Compile for iOS and tvOS
+        run: |
+          xcrun swiftc -typecheck -swift-version 6 -target arm64-apple-ios16.0 \
+            -sdk "$(xcrun --sdk iphoneos --show-sdk-path)" Shared/Services/MediaServers/*.swift Shared/Services/MediaServerAdapters/*.swift
+          xcrun swiftc -typecheck -swift-version 6 -target arm64-apple-tvos16.0 \
+            -sdk "$(xcrun --sdk appletvos --show-sdk-path)" Shared/Services/MediaServers/*.swift Shared/Services/MediaServerAdapters/*.swift

@@ -1,8 +1,14 @@
 # Shared media-provider implementation contract
 
-Status: proposed, 2026-09-06. No interfaces below have been implemented yet. This is the first shared-code batch for the [native Mac port](native-macos-plan.md) and [Silo integration](silo-native-integration-plan.md).
+Silo update (2026-09-13): native account authentication, single-flight refresh, PIN/profile isolation and catalog reads now have a separate adapter and source-checked fixtures. See [Silo implementation status](silo-native-integration-plan.md). This adds no Silo UI or playback path and does not migrate existing Jellyfin credentials.
+
+Status: foundation and first Jellyfin catalog path implemented, 2026-09-13. `Shared/Services/MediaServers` provides scoped identity, credential/cache namespaces, timeline/seek policy, playback values and ownership, and the `MediaCatalog` interface with catalog/artwork references. A separate Jellyfin adapter supplies native login, browsing, search, details and authenticated artwork to the Mac preview. This is shared work for the [native Mac port](native-macos-plan.md) and [Silo integration](silo-native-integration-plan.md).
+
+Run `swift test` for the 21-test contract suite. CI also type-checks shared sources against iOS and tvOS SDKs. Tests cover identity separation, legacy provider decoding, opaque IDs, timelines, seek windows, stale callbacks, wire requests, pagination and scoped artwork caching. Native credentials remain in memory; existing iOS/Catalyst credentials and call paths are unchanged. Storage migration, refresh coordination, playback adapters and native Silo remain planned.
 
 ## Module boundary
+
+`Shared/Services/MediaServerAdapters` contains the Jellyfin wire DTOs and ephemeral HTTP transport. Keep this separate from the Foundation-only domain target.
 
 Begin under `Shared/Services/MediaServers` with Foundation/Codable/Sendable types. Keep UIKit, AppKit, SwiftUI, Defaults, CoreStore, JellyfinAPI and Silo wire DTOs out of the domain layer. Storage, transport and UI adapters depend on it. This allows host-side tests and an eventual package extraction without rewriting the new Mac client.
 
