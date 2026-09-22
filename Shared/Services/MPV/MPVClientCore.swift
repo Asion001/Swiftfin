@@ -116,6 +116,8 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
         qos: .userInitiated
     )
 
+    private static let slowOperationThreshold: Double = 0.2
+
     private var desiredTracks: [MPVTrack.Kind: DesiredTrack] = [:]
     private var eventHandler: EventHandler?
     private var isLayerSizeCheckScheduled = false
@@ -232,6 +234,8 @@ final class MPVClientCore: MPVOptionConfigurable, @unchecked Sendable {
     func setOption(name: String, value: String) {
         queue.async { [weak self] in
             guard let self, let handle else { return }
+            let start = DispatchTime.now()
+            defer { reportIfSlow("set \(name)", since: start) }
             reportIfFailed(
                 mpv_set_property_string(handle, name, value),
                 operation: "set \(name)"
@@ -684,6 +688,8 @@ private extension MPVClientCore {
 
     func setVideoAlignY(_ value: String) {
         guard let handle else { return }
+        let start = DispatchTime.now()
+        defer { reportIfSlow("resynchronize video output", since: start) }
         reportIfFailed(
             mpv_set_property_string(handle, "video-align-y", value),
             operation: "resynchronize video output"
@@ -795,6 +801,8 @@ private extension MPVClientCore {
 
     func performCommand(_ arguments: [String]) {
         guard let handle, arguments.isNotEmpty else { return }
+        let start = DispatchTime.now()
+        defer { reportIfSlow(arguments[0], since: start) }
 
         var cArguments: [UnsafePointer<CChar>?] = arguments.map { argument in
             UnsafePointer(strdup(argument))
@@ -844,8 +852,12 @@ private extension MPVClientCore {
     }
 
     func setFlag(name: String, value: Bool) {
+        let requested = DispatchTime.now()
         queue.async { [weak self] in
             guard let self, let handle else { return }
+            reportIfSlow("waiting to set \(name)", since: requested)
+            let start = DispatchTime.now()
+            defer { reportIfSlow("set \(name)", since: start) }
             var flag: Int32 = value ? 1 : 0
             reportIfFailed(
                 mpv_set_property(handle, name, MPV_FORMAT_FLAG, &flag),
@@ -885,6 +897,9 @@ private extension MPVClientCore {
         guard let track = tracks.first(where: {
             $0.kind == desired.kind && $0.id == Int64(id)
         }) else { return }
+
+        let start = DispatchTime.now()
+        defer { reportIfSlow("select \(property)=\(track.id)", since: start) }
 
         reportIfFailed(
             mpv_set_property_string(handle, property, String(track.id)),
@@ -1045,6 +1060,15 @@ private extension MPVClientCore {
 
     func emit(_ event: Event) {
         eventHandler?(event)
+    }
+
+    /// Everything on `queue` runs in order, and most libmpv calls wait for
+    /// MPV's core, so one slow call holds back every command behind it —
+    /// pause included. Worth a line whenever it happens.
+    func reportIfSlow(_ operation: String, since start: DispatchTime) {
+        let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
+        guard elapsed >= Self.slowOperationThreshold else { return }
+        emit(.log("Slow MPV operation: \(operation) took \(String(format: "%.2f", elapsed))s"))
     }
 
     func destroyHandle() {

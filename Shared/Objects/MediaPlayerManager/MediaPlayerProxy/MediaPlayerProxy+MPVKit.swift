@@ -213,10 +213,12 @@ final class MPVMediaPlayerProxy: VideoMediaPlayerProxy,
     }
 
     func play() {
+        manager?.logger.trace("Requesting MPV play")
         client.play()
     }
 
     func pause() {
+        manager?.logger.trace("Requesting MPV pause")
         client.pause()
     }
 
@@ -486,6 +488,7 @@ private extension MPVMediaPlayerProxy {
         case let ("time-pos", .double(seconds)):
             manager?.seconds = .seconds(seconds)
         case let ("pause", .bool(isPaused)):
+            manager?.logger.trace("MPV reports pause=\(isPaused)")
             manager?.setPlaybackRequestStatus(status: isPaused ? .paused : .playing)
             holdIdleTimer(!isPaused)
         case let ("paused-for-cache", .bool(isPausedForCache)):
