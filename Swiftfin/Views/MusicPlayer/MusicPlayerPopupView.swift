@@ -899,14 +899,14 @@ private struct MusicPlayerPlaybackProgress: View {
             // Use scale effect because the slider does not respond well to horizontal frame changes.
             let xScale = insetSliderWidth > 0 ? max(1, sliderSize.width / insetSliderWidth) : 1
 
-            CapsuleSlider(
+            SliderContainer(
                 value: timeBinding,
-                total: sliderTotal,
-                translation: $currentTranslation,
-                valueDamping: isSlowScrubbing ? 0.1 : 1
+                total: sliderTotal
             )
+            .translation($currentTranslation)
+            .valueDamping(isSlowScrubbing ? 0.1 : 1)
             .gesturePadding(30)
-            .onEditingChanged(perform: scrubbingDidChange)
+            .onEditingChanged(scrubbingDidChange)
             .frame(maxWidth: sliderSize != .zero ? insetSliderWidth : .infinity)
             .scaleEffect(x: isScrubbing ? xScale : 1, y: 1, anchor: .center)
             .frame(height: isScrubbing ? 20 : 10)

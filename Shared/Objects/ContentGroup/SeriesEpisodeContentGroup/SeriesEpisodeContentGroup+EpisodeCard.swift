@@ -70,7 +70,8 @@ extension SeriesEpisodeContentGroup {
                 },
                 contextMenuItem: episode
             ) {
-                ImageView(episode.landscapeImageSources(
+                ImageView(episode.imageSources(
+                    for: .landscape,
                     environment: .init(maxWidth: 250)
                 ))
                 .failure {
@@ -81,7 +82,7 @@ extension SeriesEpisodeContentGroup {
                     overlayView
                 }
                 .contentShape(.contextMenuPreview, Rectangle())
-                .posterStyle(.landscape)
+                .posterStyle(.landscape, contentMode: .fit)
                 .subtleShadow()
                 .matchedTransitionSource(id: "item", in: namespace)
             }
@@ -113,7 +114,7 @@ extension SeriesEpisodeContentGroup {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .posterStyle(.landscape)
+                    .posterStyle(.landscape, contentMode: .fit)
                     #if os(tvOS)
                     .posterCornerRadius(.landscape)
                     #endif

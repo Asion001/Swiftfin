@@ -13,6 +13,9 @@ import SwiftUI
 
 struct NavigationBarFilterDrawer: View {
 
+    @Default(.accentColor)
+    private var accentColor
+
     @ObservedObject
     var viewModel: FilterViewModel
 
@@ -31,7 +34,7 @@ struct NavigationBarFilterDrawer: View {
                         }
                     }
                     .foregroundStyle(.primary, .secondary)
-                    .labelStyle(NavigationDrawerLabelStyle(isIconOnly: true))
+                    .labelStyle(.iconOnly)
                 }
 
                 ForEach(types, id: \.self) { type in
@@ -44,12 +47,14 @@ struct NavigationBarFilterDrawer: View {
                         )
                     }
                     .foregroundStyle(.primary, .secondary)
-                    .isHighlighted(viewModel.isFilterSelected(type: type))
+                    .isSelected(viewModel.isFilterSelected(type: type))
                 }
             }
             .padding(.horizontal)
             .padding(.bottom, 5)
-            .labelStyle(NavigationDrawerLabelStyle())
+            .controlSize(.small)
+            .labelStyle(.trailingIcon)
+            .buttonStyle(.capsule(selectionTint: accentColor))
         }
         .scrollIndicators(.hidden)
         .scrollClipDisabled()

@@ -23,6 +23,7 @@ extension BaseItemDto {
     init(person: BaseItemPerson) {
         self.init(
             id: person.id,
+            imageTags: person.primaryImageTag.map { [ImageType.primary.rawValue: $0] },
             name: person.name,
             type: .person
         )
@@ -481,9 +482,14 @@ extension BaseItemDto {
             .enumerated()
             .map { i, chapter in
 
+                guard let imageTag = chapter.imageTag, imageTag.isNotEmpty else {
+                    return .init(chapterInfo: chapter)
+                }
+
                 let parameters = Paths.GetItemImageParameters(
                     maxWidth: 500,
                     quality: 90,
+                    tag: imageTag,
                     imageIndex: i
                 )
 
