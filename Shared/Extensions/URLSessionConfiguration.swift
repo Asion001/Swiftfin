@@ -13,6 +13,11 @@ extension URLSessionConfiguration {
     /// A session configuration object built upon the default
     /// configuration with values for Swiftfin.
     static let swiftfin: URLSessionConfiguration = {
-        .default.mutating(\.timeoutIntervalForRequest, with: 20)
+        .default
+            .mutating(\.timeoutIntervalForRequest, with: 20)
+            .mutating(
+                \.protocolClasses,
+                with: [CollectionTypeCompatibilityURLProtocol.self] + (URLSessionConfiguration.default.protocolClasses ?? [])
+            )
     }()
 }
