@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is **Asion001/Swiftfin**, a fork of `jellyfin/Swiftfin` (remote `upstream`) that adds an "Enhanced" iOS player and its own distribution channels (AltStore source, Mac Catalyst installer). Upstream is merged automatically by the `Sync Jellyfin Upstream` workflow, so keep fork-only changes small and conflict-friendly.
 
+**Git workflow:** do not open pull requests. Commit and push finished work straight to `main` of `Asion001/Swiftfin`. Never open PRs, push, comment on, or otherwise write to `jellyfin/Swiftfin` or any other repository that isn't the owner's; fetching `upstream` read-only to merge it is fine.
+
 Swiftfin is a SwiftUI Jellyfin client targeting iOS 18+ / tvOS 26+ (plus Mac Catalyst in this fork).
 
 ## Setup
