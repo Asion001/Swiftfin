@@ -14,6 +14,13 @@ import SwiftUI
 
 struct ContentGroupView<Provider: ContentGroupProvider>: View {
 
+    private enum Focus: String {
+        case content = "contentGroup-content"
+    }
+
+    @Environment(\.tabSafeAreaInsets)
+    private var tabSafeAreaInsets
+
     @Environment(\.musicPlayerBottomInset)
     private var musicPlayerBottomInset
 
@@ -40,7 +47,7 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
     #endif
 
     @StateObject
-    private var focusCoordinator: FocusCoordinator = .init()
+    private var focusCoordinator = FocusCoordinator(waitingFor: Focus.content.rawValue, focusPlaceholder: true)
     @StateObject
     private var viewModel: ContentGroupViewModel<Provider>
 
@@ -62,6 +69,7 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
 
                     ContentGroupVStack(groups: viewModel.groups)
                         .edgePadding(contentGroupOptions.contains(.ignoreSafeAreaTop) ? .bottom : .vertical)
+                        .padding(.top, contentGroupOptions.contains(.ignoreSafeAreaTop) ? 0 : tabSafeAreaInsets.top)
                         .padding(.bottom, musicPlayerBottomInset)
                         .onPreferenceChange(ContentGroupCustomizationKey.self) { value in
                             contentGroupOptions = value
@@ -69,9 +77,14 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
                 }
             }
             .trackingFrame(for: .scrollView)
+            #if os(tvOS)
+            .coordinatedFocus(Focus.content.rawValue)
+            .ignoresSafeArea(.container, edges: [.horizontal, .top])
+            #else
             .ignoresSafeArea(
                 edges: contentGroupOptions.contains(.ignoreSafeAreaTop) ? [.horizontal, .top] : .horizontal
             )
+            #endif
             .scrollIndicators(.hidden)
             .refreshable {
                 await viewModel.background.refresh()
@@ -96,13 +109,22 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
                         systemImage: "rectangle.on.rectangle.slash"
                     )
                     .focusable()
+                    #if os(tvOS)
+                    .coordinatedFocus(.fallback)
+                    #endif
                 } else {
                     contentView
                 }
             case .error:
                 viewModel.error.map(ErrorView.init)
+                    #if os(tvOS)
+                        .coordinatedFocus(.fallback)
+                    #endif
             case .initial, .refreshing:
                 ProgressView()
+                    #if os(tvOS)
+                        .coordinatedFocus(.placeholder)
+                    #endif
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(edges: .all)
             }

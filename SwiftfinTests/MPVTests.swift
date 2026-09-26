@@ -8,7 +8,7 @@
 
 import Foundation
 import JellyfinAPI
-@testable import Swiftfin_iOS
+@testable import Swiftfin
 import SwiftUI
 import XCTest
 

@@ -8,7 +8,7 @@
 
 import CoreGraphics
 import Foundation
-@testable import Swiftfin_iOS
+@testable import Swiftfin
 import XCTest
 
 final class VideoEnhancementPolicyTests: XCTestCase {

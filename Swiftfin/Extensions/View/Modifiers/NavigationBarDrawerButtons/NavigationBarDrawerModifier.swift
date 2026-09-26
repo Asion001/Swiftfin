@@ -7,8 +7,12 @@
 //
 
 import SwiftUI
+@_spi(Advanced) import SwiftUIIntrospect
 
 struct NavigationBarFilterDrawerModifier: ViewModifier {
+
+    @FocusState
+    private var focusedFilter: FilterTrack.FocusTarget?
 
     @ObservedObject
     var viewModel: FilterViewModel
@@ -17,10 +21,24 @@ struct NavigationBarFilterDrawerModifier: ViewModifier {
 
     @ViewBuilder
     private var drawer: some View {
-        NavigationBarFilterDrawer(
-            viewModel: viewModel,
-            types: types
-        )
+        ScrollView(.horizontal) {
+            HStack {
+                FilterTrack(viewModel: viewModel, types: types, focus: $focusedFilter)
+            }
+        }
+        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .padding(.bottom, 5)
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        /// The drawer is the content of a `safeAreaBar`, which hands its bar the
+        /// container's rect *and* the container's safe area, expecting the bar to
+        /// lay itself out within the inset. SwiftUI does place this scroll view
+        /// correctly — but UIKit then adjusts the scroll content by that same
+        /// inset again, pushing the filters a navigation bar's height below the
+        /// bar they belong to.
+        .introspect(.scrollView, on: .iOS(.v18...)) { scrollView in
+            scrollView.contentInsetAdjustmentBehavior = .never
+        }
     }
 
     func body(content: Content) -> some View {

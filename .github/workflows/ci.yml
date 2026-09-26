@@ -37,7 +37,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -51,19 +51,36 @@ jobs:
       - name: Install pinned SwiftFormat
         run: bash Scripts/install_ci_swiftformat.sh
 
-      # FIXME: caches would keep failed compiles?
-
-      # - name: Cache Swift packages
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: PackageCache
-      #     key: ${{ runner.os }}-${{ matrix.scheme }}-spm-${{ hashFiles('**/Package.resolved') }}
-      #     restore-keys: ${{ runner.os }}-${{ matrix.scheme }}-spm-
+      - name: Restore Swift packages
+        id: swift-packages
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            build/SourcePackages/checkouts
+            build/SourcePackages/repositories
+            build/SourcePackages/artifacts
+            build/SourcePackages/workspace-state.json
+          key: spm-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.XCODE_VERSION }}-${{ matrix.scheme }}-${{ hashFiles('Swiftfin.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.XCODE_VERSION }}-${{ matrix.scheme }}-
 
       - name: Build
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v4
         with:
           max_attempts: 3
           retry_on: error
           timeout_minutes: 60
-          command: xcodebuild -quiet -skipMacroValidation -skipPackagePluginValidation -project Swiftfin.xcodeproj -scheme "${{ matrix.scheme }}" -destination "${{ matrix.destination }}" CODE_SIGNING_ALLOWED=NO build
+          command: xcodebuild -quiet -skipMacroValidation -skipPackagePluginValidation -project Swiftfin.xcodeproj -scheme "${{ matrix.scheme }}" -destination "${{ matrix.destination }}" -clonedSourcePackagesDirPath build/SourcePackages CODE_SIGNING_ALLOWED=NO build
+
+      # Populate the shared cache from main,
+      # PR caches are isolated to their merge ref
+      - name: Save Swift packages
+        if: ${{ github.event_name == 'push' && steps.swift-packages.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            build/SourcePackages/checkouts
+            build/SourcePackages/repositories
+            build/SourcePackages/artifacts
+            build/SourcePackages/workspace-state.json
+          key: ${{ steps.swift-packages.outputs.cache-primary-key }}

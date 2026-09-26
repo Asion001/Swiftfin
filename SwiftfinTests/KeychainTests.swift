@@ -6,7 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-@testable import Swiftfin_iOS
+@testable import Swiftfin
 import XCTest
 
 final class KeychainTests: XCTestCase {

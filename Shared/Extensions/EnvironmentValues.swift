@@ -45,6 +45,9 @@ extension EnvironmentValues {
     @Entry
     var subtitleOffset: Binding<Duration> = .constant(.zero)
 
+    @Entry
+    var tabSafeAreaInsets: EdgeInsets = .zero
+
     // TODO: figure out this directional response stuff
     @Entry
     var panGestureDirection: Direction = .all

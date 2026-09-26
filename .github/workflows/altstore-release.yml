@@ -127,7 +127,7 @@ jobs:
 
       - name: Package and verify IPA
         run: |
-          app="$RUNNER_TEMP/SwiftfinDerivedData/Build/Products/Release-iphoneos/Swiftfin iOS.app"
+          app="$RUNNER_TEMP/SwiftfinDerivedData/Build/Products/Release-iphoneos/Swiftfin.app"
           payload="$RUNNER_TEMP/AltStorePayload/Payload"
           staging="$RUNNER_TEMP/ios-app"
           ipa="$staging/$IPA_NAME"
@@ -136,7 +136,7 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")" = "${{ steps.metadata.outputs.version }}"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")" = "${{ steps.metadata.outputs.build_version }}"
           mkdir -p "$payload" "$staging"
-          ditto --norsrc --noextattr "$app" "$payload/Swiftfin iOS.app"
+          ditto --norsrc --noextattr "$app" "$payload/Swiftfin.app"
           ditto -c -k --norsrc --noextattr --keepParent "$RUNNER_TEMP/AltStorePayload/Payload" "$ipa"
           test -s "$ipa"
           unzip -tq "$ipa"
@@ -268,7 +268,7 @@ jobs:
       - name: Package and verify Mac app
         id: package_mac
         run: |
-          source_app="$RUNNER_TEMP/SwiftfinMacDerivedData/Build/Products/Release-maccatalyst/Swiftfin iOS.app"
+          source_app="$RUNNER_TEMP/SwiftfinMacDerivedData/Build/Products/Release-maccatalyst/Swiftfin.app"
           stage="$RUNNER_TEMP/SwiftfinMacPackage"
           app="$stage/Swiftfin Enhanced.app"
           zip="$RUNNER_TEMP/$MAC_ZIP_NAME"
@@ -276,6 +276,8 @@ jobs:
           test -d "$source_app"
           mkdir -p "$stage"
           ditto --norsrc --noextattr "$source_app" "$app"
+          # Info.plist already names the app after PRODUCT_NAME.
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleDisplayName" "$app/Contents/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Swiftfin Enhanced" "$app/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Add :LSApplicationCategoryType string public.app-category.entertainment" "$app/Contents/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "$MAC_BUNDLE_IDENTIFIER"
@@ -283,7 +285,7 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$app/Contents/Info.plist")" = "MacOSX"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "${{ needs.build.outputs.version }}"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")" = "${{ needs.build.outputs.build_version }}"
-          test "$(lipo -archs "$app/Contents/MacOS/Swiftfin iOS")" = "arm64"
+          test "$(lipo -archs "$app/Contents/MacOS/Swiftfin")" = "arm64"
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
           ditto -c -k --norsrc --noextattr --keepParent "$app" "$zip"

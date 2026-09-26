@@ -171,7 +171,7 @@ xcodebuild \
     PRODUCT_BUNDLE_IDENTIFIER="$bundle_identifier" \
     build
 
-app="$derived_data/Build/Products/$configuration-iphoneos/Swiftfin iOS.app"
+app="$derived_data/Build/Products/$configuration-iphoneos/Swiftfin.app"
 [ -d "$app" ] || fail "expected an app bundle at $app"
 
 printf 'Installing\n'
